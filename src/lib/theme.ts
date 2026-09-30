@@ -1,27 +1,44 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 export type Theme = "light" | "dark";
 const KEY = "yosra-theme";
 
-function readInitial(): Theme {
-  if (typeof document !== "undefined" && document.documentElement.classList.contains("dark")) {
-    return "dark";
-  }
-  return "light";
+/** آیا کلاس .dark روی <html> هست — منبع حقیقت تم در DOM است. */
+function isDark(): boolean {
+  return document.documentElement.classList.contains("dark");
+}
+
+const listeners = new Set<() => void>();
+function notify() {
+  for (const l of listeners) l();
+}
+function subscribe(cb: () => void) {
+  listeners.add(cb);
+  return () => {
+    listeners.delete(cb);
+  };
 }
 
 /**
  * تم روشن/تیره — کلاس `.dark` را روی <html> می‌گذارد و در localStorage ذخیره می‌کند.
- * مقدار اولیه از روی کلاسی که اسکریپت pre-hydration گذاشته می‌خواند تا پرش رنگ نباشد.
+ *
+ * برای جلوگیری از hydration mismatch، state اولیه در SSR و کلاینت یکسان است:
+ * `useSyncExternalStore` در سرور همیشه "light" برمی‌گرداند و تنها پس از mount
+ * مقدار واقعی (از localStorage/prefers-color-scheme) خوانده می‌شود. آیکون دکمه
+ * نیز به جای state با کلاس `.dark` کنترل می‌شود.
  */
 export function useTheme(): {
   theme: Theme;
   toggle: () => void;
   setTheme: (t: Theme) => void;
 } {
-  const [theme, setThemeState] = useState<Theme>(readInitial);
+  const theme = useSyncExternalStore(
+    subscribe,
+    () => (isDark() ? "dark" : "light"),
+    () => "light" as Theme
+  );
 
   const apply = useCallback((t: Theme) => {
     const root = document.documentElement;
@@ -32,39 +49,19 @@ export function useTheme(): {
     } catch {
       /* حافظه در دسترس نیست */
     }
+    notify();
   }, []);
 
-  const setTheme = useCallback((t: Theme) => {
-    setThemeState(t);
-    apply(t);
-  }, [apply]);
+  const setTheme = useCallback(
+    (t: Theme) => {
+      apply(t);
+    },
+    [apply]
+  );
 
   const toggle = useCallback(() => {
-    setThemeState((prev) => {
-      const next = prev === "dark" ? "light" : "dark";
-      apply(next);
-      return next;
-    });
+    apply(isDark() ? "light" : "dark");
   }, [apply]);
-
-  // همگام‌سازی با تغییر سیستم (فقط اگر کاربر انتخاب صریح نداشته باشد)
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = (e: MediaQueryListEvent) => {
-      if (localStorage.getItem(KEY)) return;
-      setTheme(e.matches ? "dark" : "light");
-    };
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, [setTheme]);
-
-  // اطمینان از هماهنگی کلاس <html> با state بعد از هیدرات —
-  // ری‌اکت کلاس پیش‌هیدرات را در hydration پاک می‌کند، پس دوباره می‌گذاریم.
-  useEffect(() => {
-    apply(theme);
-    // فقط در mount اجرا می‌شود
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   return { theme, toggle, setTheme };
 }
