@@ -3,11 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
-  balance,
   categorySlices,
-  debtAmountAt,
-  debtMonthAt,
-  debtMonths,
   debtStats,
   sortedTrans,
   totalsFor,
@@ -105,35 +101,12 @@ export default function DashboardPage() {
     toast("حذف شد ✓");
   };
 
-  /** پرداخت سریع قسط سررسید این ماه — مستقیم از داشبورد */
-  const payNextDue = () => {
-    if (debts.dueCount === 0) return;
-    for (const d of db.debts) {
-      const months = debtMonths(d);
-      for (let i = 1; i <= months; i++) {
-        const paid = db.debtPaid.some((p) => p.debtId === d.id && p.idx === i);
-        if (paid) continue;
-        const m = debtMonthAt(d, i);
-        if (m.y !== nowJ[0] || m.m !== nowJ[1]) continue;
-        const amount = debtAmountAt(d, i);
-        const avail = balance(db);
-        if (amount > avail) {
-          toast(`موجودی کافی نیست! موجودی فعلی: ${money(avail)} تومان`, "error");
-          return;
-        }
-        dispatch({ type: "payDebt", payload: { debtId: d.id, idx: i } });
-        toast(`قسط «${d.name}» معادل ${money(amount)} تومان پرداخت شد ✅`);
-        return;
-      }
-    }
-  };
-
   return (
     <div className="space-y-5">
       <Title text="داشبورد" />
 
       {/* ------------------------------ ردیف اول ------------------------------ */}
-      <div className="grid gap-5 lg:grid-cols-3">
+      <div className="grid gap-5 lg:grid-cols-4">
         {/* موجودی */}
         <Card
           className="relative overflow-hidden bg-gradient-to-bl from-brand to-brand-2 p-5 text-white lg:col-span-1 lg:p-6"
@@ -209,7 +182,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* بدهی */}
-        <Card className="p-5 lg:p-6" delay={160}>
+        <Card className="p-5 lg:col-span-2 lg:p-6" delay={160}>
           <SectionTitle
             icon={<DebtIcon size={18} />}
             title="بدهی و اقساط"
@@ -225,18 +198,18 @@ export default function DashboardPage() {
             }
           />
 
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <div className="rounded-2xl bg-canvas p-3.5">
-              <span className="text-[11.5px] text-muted">بدهی باقی‌مانده</span>
-              <p className="num mt-1 text-[17px] font-black text-rose">{money(debts.left)}</p>
+          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-center">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-canvas p-4">
+                <span className="text-[11.5px] text-muted">بدهی باقی‌مانده</span>
+                <p className="num mt-1 text-lg font-black text-rose sm:text-xl">{money(debts.left)}</p>
+              </div>
+              <div className="rounded-2xl bg-canvas p-4">
+                <span className="text-[11.5px] text-muted">پرداخت‌شده</span>
+                <p className="num mt-1 text-lg font-black text-mint sm:text-xl">{money(debts.paid)}</p>
+              </div>
             </div>
-            <div className="rounded-2xl bg-canvas p-3.5">
-              <span className="text-[11.5px] text-muted">پرداخت‌شده</span>
-              <p className="num mt-1 text-[17px] font-black text-mint">{money(debts.paid)}</p>
-            </div>
-          </div>
 
-          <div className="mt-4">
             <ProgressRow
               emoji="💳"
               label={`کل بدهی ${money(debts.total)} تومان`}
@@ -248,21 +221,12 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className="mt-4 flex gap-2">
-            <Link href="/debts" className="flex-1">
+          <div className="mt-4">
+            <Link href="/debts" className="block">
               <Btn variant="soft" className="w-full">
                 مدیریت بدهی‌ها
               </Btn>
             </Link>
-            {debts.dueCount > 0 ? (
-              <Btn variant="success" onClick={payNextDue} title="پرداخت قسط سررسید این ماه">
-                💵 پرداخت قسط
-              </Btn>
-            ) : (
-              <Btn onClick={() => open({ type: 0 })} title="ثبت خرج جدید">
-                ＋ ثبت خرج
-              </Btn>
-            )}
           </div>
         </Card>
       </div>
