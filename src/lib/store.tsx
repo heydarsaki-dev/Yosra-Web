@@ -10,11 +10,13 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { usePathname } from "next/navigation";
 import type { Category, DBShape, Debt, DebtPaid, Member, Trans, TxType } from "./types";
 import { DEBT_CAT_EMOJI, DEBT_CAT_NAME } from "./types";
 import { emptyDB, initialDB } from "./seed";
 import { fa, jParts, monthName } from "./jalali";
 import { pullDB, pushDB, remoteTime, isValidDB } from "./github";
+import { clearOutbox, loadOutbox, logChange, replayOutbox } from "./outbox";
 const KEY = "yosra-db-v1";
 
 /** محاسبهٔ seq بعد از بازیابی — جلوگیری از تداخل شناسه‌ها */
@@ -263,10 +265,107 @@ function reducerInner(db: DBShape, a: Action): DBShape {
   }
 }
 
-/** wrapper: هر تغییر واقعی را کثیف می‌کند تا سینک خودکار آن را آپلود کند */
+/** wrapper: هر تغییر واقعی را در outbox ثبت می‌کند و کثیف می‌کند تا سینک
+ *  خودکار آن را آپلود کند. ثبت در reducer (نه reducerInner) انجام می‌شود
+ *  تا syncOn که کل DBShape را جایگزین می‌کند، outbox را پاک نکند. */
+function logOutbox(a: Action, next: DBShape, before: DBShape): void {
+  switch (a.type) {
+    case "addTrans": {
+      const t = next.transactions.find((x) => !before.transactions.some((y) => y.id === x.id));
+      if (t) logChange("transactions", String(t.id), 0, t);
+      break;
+    }
+    case "updateTrans":
+      logChange("transactions", String(a.payload.id), 1, a.payload.patch);
+      break;
+    case "deleteTrans":
+      logChange("transactions", String(a.payload), 2);
+      break;
+    case "reorderTrans":
+      for (const id of a.payload) {
+        const t = next.transactions.find((x) => x.id === id);
+        if (t) logChange("transactions", String(id), 1, { sortOrder: t.sortOrder });
+      }
+      break;
+
+    case "addMember": {
+      const m = next.members.find((x) => !before.members.some((y) => y.id === x.id));
+      if (m) logChange("members", String(m.id), 0, m);
+      break;
+    }
+    case "updateMember":
+      logChange("members", String(a.payload.id), 1, a.payload.patch);
+      break;
+    case "deleteMember":
+      logChange("members", String(a.payload), 2);
+      // حذف آبشاری تراکنش‌های عضو
+      for (const t of before.transactions.filter((x) => x.memberId === a.payload)) {
+        logChange("transactions", String(t.id), 2);
+      }
+      break;
+
+    case "addCategory": {
+      const c = next.categories.find((x) => !before.categories.some((y) => y.id === x.id));
+      if (c) logChange("categories", String(c.id), 0, c);
+      break;
+    }
+    case "updateCategory":
+      logChange("categories", String(a.payload.id), 1, a.payload.patch);
+      break;
+    case "deleteCategory":
+      logChange("categories", String(a.payload), 2);
+      break;
+    case "reorderCategories":
+      for (const id of a.payload) {
+        const c = next.categories.find((x) => x.id === id);
+        if (c) logChange("categories", String(id), 1, { sortOrder: c.sortOrder });
+      }
+      break;
+
+    case "addDebt": {
+      const d = next.debts.find((x) => !before.debts.some((y) => y.id === x.id));
+      if (d) logChange("debts", String(d.id), 0, d);
+      break;
+    }
+    case "updateDebt":
+      logChange("debts", String(a.payload.id), 1, a.payload.patch);
+      break;
+    case "deleteDebt": {
+      logChange("debts", String(a.payload), 2);
+      // حذف آبشاری پرداخت‌ها و تراکنش‌های بدهی
+      for (const p of before.debtPaid.filter((x) => x.debtId === a.payload)) {
+        logChange("debt_paid", `${p.debtId},${p.idx}`, 2);
+      }
+      const txIds = before.debtPaid.filter((p) => p.debtId === a.payload).map((p) => p.txId);
+      for (const txId of txIds) logChange("transactions", String(txId), 2);
+      break;
+    }
+    case "payDebt": {
+      const t = next.transactions.find((x) => !before.transactions.some((y) => y.id === x.id));
+      if (t) logChange("transactions", String(t.id), 0, t);
+      const p = next.debtPaid.find((x) => !before.debtPaid.some((y) => y.debtId === x.debtId && y.idx === x.idx));
+      if (p) logChange("debt_paid", `${p.debtId},${p.idx}`, 0, p);
+      break;
+    }
+    case "cancelPay": {
+      const rec = before.debtPaid.find(
+        (p) => p.debtId === a.payload.debtId && p.idx === a.payload.idx,
+      );
+      if (rec) {
+        logChange("debt_paid", `${rec.debtId},${rec.idx}`, 2);
+        logChange("transactions", String(rec.txId), 2);
+      }
+      break;
+    }
+    default:
+      break;
+  }
+}
+
 function reducer(db: DBShape, a: Action): DBShape {
   const next = reducerInner(db, a);
   if (next !== db && DATA_ACTIONS.has(a.type)) {
+    logOutbox(a, next, db);
     return { ...next, lastModified: Date.now(), demoUntouched: false };
   }
   return next;
@@ -497,7 +596,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!cur.token || syncBusy.current) return false;
     syncBusy.current = true;
     try {
+      // آنلاین جدیدتر است → دریافت، اعمال outbox، سپس آپلود نتیجه (ادغام)
+      const rt = await remoteTime(cur.token);
+      if (rt > cur.lastSync + 60_000) {
+        const remote = await pullDB(cur.token);
+        if (isValidDB(remote)) {
+          const merged = replayOutbox(
+            { ...emptyDB(), ...remote },
+            loadOutbox(),
+          );
+          skipNextAutoPush.current = true;
+          dispatch({
+            type: "syncOn",
+            payload: { ...merged, token: cur.token, lastSync: Date.now() },
+          });
+          await pushDB(cur.token, merged);
+          clearOutbox(); // فقط بعد از آپلود موفق
+          return true;
+        }
+        // دریافت ناموفق → outbox نگه داشته می‌شود، دفعهٔ بعد تلاش می‌شود
+      }
+      // آنلاین قدیمی‌تر یا مساوی → آپلود ساده
       await pushDB(cur.token, cur);
+      clearOutbox();
       dispatch({ type: "setLastSync", payload: Date.now() });
       return true;
     } catch (e) {
@@ -520,6 +641,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const next: DBShape = { ...emptyDB(), ...remote, token: cur.token };
         next.seq = computeSeq(next);
         skipNextAutoPush.current = true;
+        // کاربر صراحتاً نسخهٔ آنلاین را خواسته → تغییرات محلی دیگر لازم نیستند
+        clearOutbox();
         dispatch({ type: "syncOn", payload: { ...next, lastSync: Date.now() } });
         if (!silent) toast("📥 آخرین نسخه دریافت شد");
         return true;
@@ -564,6 +687,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     didStart.current = true;
     void startSync();
   }, [ready, startSync]);
+
+  // سینک روی تغییر مسیر — با هر navigation بین صفحات همگام‌سازی می‌شود
+  const pathname = usePathname();
+  const lastPath = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ready || !pathname) return;
+    if (lastPath.current === pathname) return;
+    lastPath.current = pathname;
+    void startSync();
+  }, [pathname, ready, startSync]);
 
   // آپلود خودکار پس از هر تغییر (debounced ۳ ثانیه)
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
