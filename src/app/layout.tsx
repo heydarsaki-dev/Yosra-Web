@@ -12,9 +12,18 @@ export const metadata: Metadata = {
   description: "داشبورد وب یسرا — ثبت درآمد و خرج، بدهی و اقساط و گزارش‌های رنگارنگ خانوادگی",
 };
 
+/**
+ * اسکریپت کوچک قبل از هیدرات — تم ذخیره‌شده را روی <html> می‌گذارد تا
+ * هنگام بارگذاری، پرش رنگ (FOUC) نبینیم.
+ */
+const themeScript = `(function(){try{var t=localStorage.getItem("yosra-theme");var m=window.matchMedia("(prefers-color-scheme: dark)").matches;if(t==="dark"||(!t&&m))document.documentElement.classList.add("dark");}catch(e){}})();`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fa" dir="rtl">
+    <html lang="fa" dir="rtl" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className="min-h-screen antialiased">
         <StoreProvider>
           <AppShell>{children}</AppShell>

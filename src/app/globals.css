@@ -1,19 +1,26 @@
 @import "tailwindcss";
 
+/* دارک مود با کلاس (نه فقط prefers-color-scheme) */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: "Vazirmatn", ui-sans-serif, system-ui, sans-serif;
 
+  /* سطح پایه */
   --color-canvas: #f6f7fc;
+  --color-card: #ffffff;
   --color-ink: #1a1b2e;
   --color-muted: #6b7194;
   --color-faint: #9aa0bc;
   --color-line: #eef0f8;
 
+  /* برند */
   --color-brand: #6c5ce7;
   --color-brand-deep: #5246d6;
   --color-brand-2: #9b7bf5;
   --color-brand-soft: #efedff;
 
+  /* رنگ‌های کاربردی */
   --color-mint: #059669;
   --color-mint-soft: #d5f2e5;
   --color-rose: #e11d48;
@@ -31,6 +38,37 @@
   --radius-card: 22px;
 }
 
+/* ------------------------------------------------------------------ */
+/* تم تیره — رنگ‌های جذاب نئونی روی پس‌زمینهٔ نیلی عمیق                    */
+/* ------------------------------------------------------------------ */
+.dark {
+  --color-canvas: #0a0c1a;
+  --color-card: #141731;
+  --color-ink: #eef0fb;
+  --color-muted: #a8adcd;
+  --color-faint: #71769b;
+  --color-line: #242a4a;
+
+  --color-brand: #8b6fff;
+  --color-brand-deep: #6b4fe8;
+  --color-brand-2: #a78bfa;
+  --color-brand-soft: #252047;
+
+  --color-mint: #34d399;
+  --color-mint-soft: #10352b;
+  --color-rose: #fb7185;
+  --color-rose-soft: #3b1527;
+  --color-gold: #fbbf24;
+  --color-gold-soft: #3a2c10;
+  --color-sky: #38bdf8;
+  --color-sky-soft: #0c2f3d;
+  --color-grape: #c084fc;
+  --color-grape-soft: #2d1b4a;
+
+  --shadow-soft: 0 10px 30px -18px rgba(0, 0, 0, 0.75);
+  --shadow-lift: 0 24px 50px -24px rgba(139, 111, 255, 0.45);
+}
+
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
@@ -41,6 +79,7 @@
     color: var(--color-ink);
     font-family: var(--font-sans);
     font-feature-settings: "ss01";
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
 
   ::selection {
@@ -60,11 +99,17 @@
   ::-webkit-scrollbar-thumb:hover {
     background: #c8cde3;
   }
+  .dark ::-webkit-scrollbar-thumb {
+    background: #2b3252;
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: #3a4268;
+  }
 }
 
 @layer components {
   .card {
-    background: #fff;
+    background: var(--color-card);
     border: 1px solid var(--color-line);
     border-radius: var(--radius-card);
     box-shadow: var(--shadow-soft);

@@ -50,7 +50,7 @@ export function Donut({
           cy={size / 2}
           r={r}
           fill="none"
-          stroke="#EEF0F8"
+          stroke="var(--color-line)"
           strokeWidth={thickness}
         />
         {total > 0 &&
@@ -117,7 +117,7 @@ export function BarsChart({ data, height = 210 }: { data: BarDay[]; height?: num
         <span className="flex items-baseline gap-1 text-[11px] text-faint">
           <span className="num">{money(max)}</span>تومان
         </span>
-        <span className="flex items-center gap-4 text-[11px] text-muted">
+        <span className="flex items-center gap-3 text-[11px] text-muted sm:gap-4">
           <span className="flex items-center gap-1.5">
             <i className="size-2.5 rounded-full bg-mint" /> درآمد
           </span>
@@ -127,7 +127,7 @@ export function BarsChart({ data, height = 210 }: { data: BarDay[]; height?: num
         </span>
       </div>
 
-      <div className="relative flex items-end gap-[3px]" style={{ height }}>
+      <div className="relative flex items-end gap-[2px] sm:gap-[3px]" style={{ height }}>
         {/* خطوط راهنما */}
         {[0, 0.25, 0.5, 0.75, 1].map((p) => (
           <div
@@ -142,17 +142,17 @@ export function BarsChart({ data, height = 210 }: { data: BarDay[]; height?: num
           return (
             <div
               key={i}
-              className="group relative flex h-full flex-1 items-end justify-center gap-[3px]"
+              className="group relative flex h-full flex-1 items-end justify-center gap-[2px] sm:gap-[3px]"
             >
               <div
-                className="bar-grow w-full max-w-[13px] rounded-t-md bg-gradient-to-t from-mint to-[#34d399] transition group-hover:brightness-110"
+                className="bar-grow w-full max-w-[13px] rounded-t-md bg-gradient-to-t from-mint to-[#34d399] transition group-hover:brightness-110 dark:from-[#0e8a63] dark:to-[#34d399]"
                 style={{
                   height: `${Math.max(d.inc > 0 ? 3 : 0, (d.inc / max) * 100)}%`,
                   animationDelay: `${Math.min(i * 22, 600)}ms`,
                 }}
               />
               <div
-                className="bar-grow w-full max-w-[13px] rounded-t-md bg-gradient-to-t from-rose to-[#fb7185] transition group-hover:brightness-110"
+                className="bar-grow w-full max-w-[13px] rounded-t-md bg-gradient-to-t from-rose to-[#fb7185] transition group-hover:brightness-110 dark:from-[#b91c3f] dark:to-[#fb7185]"
                 style={{
                   height: `${Math.max(d.exp > 0 ? 3 : 0, (d.exp / max) * 100)}%`,
                   animationDelay: `${Math.min(i * 22, 600)}ms`,
@@ -160,13 +160,13 @@ export function BarsChart({ data, height = 210 }: { data: BarDay[]; height?: num
               />
 
               {show && (
-                <span className="absolute -bottom-6 right-1/2 translate-x-1/2 text-[10px] text-faint">
+                <span className="absolute -bottom-6 right-1/2 translate-x-1/2 text-[9px] text-faint sm:text-[10px]">
                   {d.label}
                 </span>
               )}
 
               {(d.inc > 0 || d.exp > 0) && (
-                <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden -translate-x-1/2 flex-col items-center gap-1 rounded-xl bg-ink px-3 py-2 text-[11px] text-white shadow-lg group-hover:flex">
+                <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden -translate-x-1/2 flex-col items-center gap-1 rounded-xl bg-[#1e2138] px-3 py-2 text-[11px] text-white shadow-lg group-hover:flex dark:bg-[#282c4e]">
                   <span className="font-bold">{d.label}</span>
                   <span className="num text-[#6ee7b7]">+ {money(d.inc)}</span>
                   <span className="num text-[#fda4af]">− {money(d.exp)}</span>
@@ -231,41 +231,76 @@ export function ProgressRow({
   );
 }
 
-/* ------------------------------ اسپارک‌لاین ------------------------------ */
+/* ------------------------------ اسپارک‌لاین عریض ------------------------------ */
 
 export function Sparkline({
   values,
   color = "#6C5CE7",
-  height = 44,
+  height = 64,
+  width = 240,
 }: {
   values: number[];
   color?: string;
   height?: number;
+  width?: number;
 }) {
   const pts = values.length < 2 ? [...values, ...values] : values;
   const max = Math.max(1, ...pts);
-  const w = 120;
   const points = pts.map((v, i) => {
-    const x = (i / (pts.length - 1)) * w;
-    const y = height - (v / max) * (height - 6) - 3;
+    const x = (i / (pts.length - 1)) * width;
+    const y = height - (v / max) * (height - 10) - 5;
     return [x, y] as const;
   });
   const line = points
     .map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`)
     .join(" ");
-  const area = `${line} L${w},${height} L0,${height} Z`;
+  const area = `${line} L${width},${height} L0,${height} Z`;
   const id = `spark-${color.replace("#", "")}`;
+  const stroke = 4;
 
   return (
-    <svg width="100%" height={height} viewBox={`0 0 ${w} ${height}`} preserveAspectRatio="none">
+    <svg
+      width="100%"
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      className="overflow-visible"
+    >
       <defs>
         <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+          <stop offset="0%" stopColor={color} stopOpacity="0.4" />
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
       </defs>
+      {/* خط راهنمای پایین */}
+      <line
+        x1="0"
+        y1={height - 0.5}
+        x2={width}
+        y2={height - 0.5}
+        stroke="var(--color-line)"
+        strokeWidth="1"
+      />
       <path d={area} fill={`url(#${id})`} />
-      <path d={line} fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" />
+      <path
+        d={line}
+        fill="none"
+        stroke={color}
+        strokeWidth={stroke}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* نقطهٔ آخر — نشانگر وضعیت فعلی */}
+      {points.length > 0 && (
+        <circle
+          cx={points[points.length - 1][0]}
+          cy={points[points.length - 1][1]}
+          r={stroke}
+          fill={color}
+          stroke="var(--color-card)"
+          strokeWidth="2"
+        />
+      )}
     </svg>
   );
 }

@@ -75,22 +75,25 @@ export default function DebtDetailPage() {
       </Link>
 
       {/* سربرگ */}
-      <Card className="relative overflow-hidden bg-gradient-to-bl from-brand to-brand-2 p-6 text-white" delay={0}>
+      <Card
+        className="relative overflow-hidden bg-gradient-to-bl from-brand to-brand-2 p-5 text-white lg:p-6"
+        delay={0}
+      >
         <div className="pointer-events-none absolute -left-12 -bottom-12 size-44 rounded-full bg-white/15 blur-2xl" />
         <div className="relative flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <span className="grid size-12 place-items-center rounded-2xl bg-white/20 text-2xl">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-white/20 text-2xl">
               💳
             </span>
-            <div>
-              <h2 className="text-lg font-black">{debt.name}</h2>
-              <p className="mt-0.5 text-[12px] text-white/85">
+            <div className="min-w-0">
+              <h2 className="truncate text-base font-black sm:text-lg">{debt.name}</h2>
+              <p className="mt-0.5 text-[11.5px] text-white/85 sm:text-[12px]">
                 ماهی {money(debt.monthly)} تومان • {fa(months)} قسط • شروع{" "}
                 {monthName(debt.startM)} {fa(debt.startY)}
               </p>
             </div>
           </div>
-          <div className="flex gap-1.5">
+          <div className="flex shrink-0 gap-1.5">
             <button
               onClick={() => setEditOpen(true)}
               className="grid size-9 place-items-center rounded-xl bg-white/15 text-white transition hover:bg-white/25"
@@ -108,15 +111,15 @@ export default function DebtDetailPage() {
           </div>
         </div>
 
-        <div className="relative mt-6 grid grid-cols-3 gap-3">
+        <div className="relative mt-6 grid grid-cols-3 gap-2 sm:gap-3">
           {[
             { label: "کل بدهی", value: debt.total },
             { label: "پرداخت‌شده", value: paidAmt },
             { label: "باقی‌مانده", value: remaining },
           ].map((k) => (
-            <div key={k.label} className="rounded-2xl bg-white/15 p-3">
-              <span className="text-[11px] text-white/85">{k.label}</span>
-              <p className="num mt-1 text-[15px] font-black">{money(k.value)}</p>
+            <div key={k.label} className="rounded-2xl bg-white/15 p-2.5 sm:p-3">
+              <span className="text-[10.5px] text-white/85 sm:text-[11px]">{k.label}</span>
+              <p className="num mt-1 text-[13px] font-black sm:text-[15px]">{money(k.value)}</p>
             </div>
           ))}
         </div>
@@ -163,7 +166,7 @@ export default function DebtDetailPage() {
             return (
               <div
                 key={idx}
-                className="flex items-center gap-3 rounded-2xl border border-line p-3.5"
+                className="flex flex-wrap items-center gap-3 rounded-2xl border border-line p-3 sm:flex-nowrap"
               >
                 <span
                   className={`grid size-10 shrink-0 place-items-center rounded-2xl text-sm font-black ${

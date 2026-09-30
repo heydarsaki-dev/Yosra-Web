@@ -67,18 +67,18 @@ export default function TransactionsPage() {
     <div className="space-y-5">
       <Title text="تراکنش‌ها" />
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Card className="p-4" delay={0}>
-          <span className="text-[12px] text-muted">تعداد نتایج</span>
-          <p className="num mt-1 text-xl font-black text-brand">{fa(rows.length)}</p>
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <Card className="p-3 sm:p-4" delay={0}>
+          <span className="text-[11px] text-muted sm:text-[12px]">تعداد نتایج</span>
+          <p className="num mt-1 text-lg font-black text-brand sm:text-xl">{fa(rows.length)}</p>
         </Card>
-        <Card className="p-4" delay={70}>
-          <span className="text-[12px] text-muted">مجموع درآمد</span>
-          <p className="num mt-1 text-xl font-black text-mint">{money(sums.inc)}</p>
+        <Card className="p-3 sm:p-4" delay={70}>
+          <span className="text-[11px] text-muted sm:text-[12px]">مجموع درآمد</span>
+          <p className="num mt-1 text-lg font-black text-mint sm:text-xl">{money(sums.inc)}</p>
         </Card>
-        <Card className="p-4" delay={140}>
-          <span className="text-[12px] text-muted">مجموع خرج</span>
-          <p className="num mt-1 text-xl font-black text-rose">{money(sums.out)}</p>
+        <Card className="p-3 sm:p-4" delay={140}>
+          <span className="text-[11px] text-muted sm:text-[12px]">مجموع خرج</span>
+          <p className="num mt-1 text-lg font-black text-rose sm:text-xl">{money(sums.out)}</p>
         </Card>
       </div>
 
@@ -103,7 +103,7 @@ export default function TransactionsPage() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="جست‌وجو در یادداشت، دسته یا کاربر..."
-              className="w-full rounded-2xl border border-line bg-canvas py-2.5 pr-10 pl-4 text-[13px] outline-none transition placeholder:text-faint focus:border-brand focus:bg-white"
+              className="w-full rounded-2xl border border-line bg-canvas py-2.5 pr-10 pl-4 text-[13px] outline-none transition placeholder:text-faint focus:border-brand focus:bg-card"
             />
           </div>
           <div className="flex gap-2">

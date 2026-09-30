@@ -22,7 +22,7 @@ export function Card({
 }) {
   return (
     <section
-      className={`card fade-up ${className}`}
+      className={`card fade-up min-w-0 overflow-hidden ${className}`}
       style={{ animationDelay: `${delay}ms` }}
     >
       {children}
@@ -83,10 +83,10 @@ export function Btn({
   const variants: Record<string, string> = {
     primary:
       "bg-gradient-to-l from-brand-deep to-brand text-white shadow-[0_14px_28px_-16px_rgba(108,92,231,.9)] hover:brightness-110",
-    soft: "bg-brand-soft text-brand hover:bg-[#e5e1ff]",
+    soft: "bg-brand-soft text-brand hover:brightness-105 dark:bg-brand-soft dark:hover:brightness-110",
     ghost: "bg-transparent text-muted hover:bg-line",
-    danger: "bg-rose-soft text-rose hover:bg-[#fbcfd9]",
-    success: "bg-mint-soft text-mint hover:bg-[#c6ebdc]",
+    danger: "bg-rose-soft text-rose hover:brightness-105",
+    success: "bg-mint-soft text-mint hover:brightness-105",
   };
   const sizes: Record<string, string> = {
     sm: "h-9 px-3.5 text-[13px] rounded-xl",
@@ -123,7 +123,8 @@ export function Chip({
     mint: "border-mint bg-mint-soft text-mint",
     rose: "border-rose bg-rose-soft text-rose",
   };
-  const off = "border-line bg-white text-muted hover:border-[#dfe3f2] hover:text-ink";
+  const off =
+    "border-line bg-card text-muted hover:border-brand/40 hover:text-ink";
   return (
     <button
       type="button"
@@ -165,11 +166,11 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/45 p-0 backdrop-blur-[3px] sm:items-center sm:p-6"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/45 p-0 backdrop-blur-[3px] dark:bg-black/60 sm:items-center sm:p-6"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
-        className={`pop-in flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-[26px] bg-white shadow-2xl sm:max-h-[88vh] sm:rounded-[26px] ${
+        className={`pop-in flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-[26px] bg-card shadow-2xl sm:max-h-[88vh] sm:rounded-[26px] ${
           wide ? "sm:max-w-3xl" : "sm:max-w-lg"
         }`}
       >
@@ -177,7 +178,7 @@ export function Modal({
           <h3 className="text-[15px] font-bold text-ink">{title}</h3>
           <button
             onClick={onClose}
-            className="grid size-9 place-items-center rounded-xl bg-line text-muted transition hover:bg-[#e3e7f5] hover:text-ink"
+            className="grid size-9 place-items-center rounded-xl bg-line text-muted transition hover:text-ink"
             aria-label="بستن"
           >
             <CloseIcon size={18} />
@@ -208,7 +209,7 @@ export function Field({
 }
 
 export const inputCls =
-  "w-full rounded-2xl border border-line bg-canvas px-4 py-3 text-sm text-ink outline-none transition placeholder:text-faint focus:border-brand focus:bg-white";
+  "w-full rounded-2xl border border-line bg-canvas px-4 py-3 text-sm text-ink outline-none transition placeholder:text-faint focus:border-brand focus:bg-card";
 
 export function Empty({
   emoji,

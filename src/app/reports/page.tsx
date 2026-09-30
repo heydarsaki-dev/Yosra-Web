@@ -40,8 +40,8 @@ export default function ReportsPage() {
     const j = jParts(Date.now());
     return { y: j[0], m: j[1] };
   });
-  const [donutType, setDonutType] = useState<TxType>(0);
-  const [memberType, setMemberType] = useState<TxType>(0);
+  const [donutType, setDonutType] = useState<TxType>(1);
+  const [memberType, setMemberType] = useState<TxType>(1);
 
   const nowJ = jParts(useNow());
 
@@ -151,18 +151,18 @@ export default function ReportsPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => shift(-1)}
-              className="grid size-9 place-items-center rounded-xl border border-line bg-white text-brand transition hover:bg-brand-soft"
+              className="grid size-9 shrink-0 place-items-center rounded-xl border border-line bg-card text-brand transition hover:bg-brand-soft"
               title={mode === "day" ? "روز قبل" : "ماه قبل"}
             >
               <ChevronRightIcon size={17} />
             </button>
-            <span className="min-w-[150px] text-center text-sm font-black text-ink">
+            <span className="min-w-[130px] flex-1 text-center text-[13px] font-black text-ink sm:min-w-[150px] sm:text-sm">
               {periodLabel}
             </span>
             <button
               onClick={() => shift(1)}
               disabled={!canNext}
-              className="grid size-9 place-items-center rounded-xl border border-line bg-white text-brand transition hover:bg-brand-soft disabled:opacity-30"
+              className="grid size-9 shrink-0 place-items-center rounded-xl border border-line bg-card text-brand transition hover:bg-brand-soft disabled:opacity-30"
               title={mode === "day" ? "روز بعد" : "ماه بعد"}
             >
               <ChevronLeftIcon size={17} />
@@ -172,7 +172,7 @@ export default function ReportsPage() {
       </Card>
 
       {/* KPI */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         {[
           { label: "درآمد دوره", value: sums.inc, tone: "mint", icon: IncomeIcon },
           { label: "خرج دوره", value: sums.out, tone: "rose", icon: ExpenseIcon },
@@ -183,9 +183,9 @@ export default function ReportsPage() {
             icon: ChartIcon,
           },
         ].map((k, i) => (
-          <Card key={k.label} className="p-5" delay={i * 70}>
+          <Card key={k.label} className="p-4 lg:p-5" delay={i * 70}>
             <div className="flex items-center justify-between">
-              <span className="text-[12.5px] text-muted">{k.label}</span>
+              <span className="text-[11.5px] text-muted sm:text-[12.5px]">{k.label}</span>
               <span
                 className={`grid size-8 place-items-center rounded-xl ${
                   k.tone === "mint"
@@ -199,7 +199,7 @@ export default function ReportsPage() {
               </span>
             </div>
             <p
-              className={`num mt-2 text-xl font-black ${
+              className={`num mt-2 text-lg font-black sm:text-xl ${
                 k.tone === "mint" ? "text-mint" : k.tone === "rose" ? "text-rose" : "text-brand"
               }`}
             >
@@ -208,11 +208,11 @@ export default function ReportsPage() {
           </Card>
         ))}
 
-        <Card className="p-5" delay={210}>
-          <span className="text-[12.5px] text-muted">تعداد تراکنش</span>
-          <p className="num mt-2 text-xl font-black text-ink">{fa(period.length)}</p>
-          <p className="mt-1 text-[11.5px] text-faint">
-            {mode === "day" ? "تراکنش در این روز" : "تراکنش در این ماه"}
+        <Card className="p-4 lg:p-5" delay={210}>
+          <span className="text-[11.5px] text-muted sm:text-[12.5px]">تعداد تراکنش</span>
+          <p className="num mt-2 text-lg font-black text-ink sm:text-xl">{fa(period.length)}</p>
+          <p className="mt-1 text-[11px] text-faint sm:text-[11.5px]">
+            {mode === "day" ? "در این روز" : "در این ماه"}
           </p>
         </Card>
       </div>
@@ -237,11 +237,11 @@ export default function ReportsPage() {
             title={`${donutType === 0 ? "خرج" : "درآمد"} به تفکیک دسته 🍩`}
             action={
               <div className="flex gap-2">
-                <Chip tone="rose" active={donutType === 0} onClick={() => setDonutType(0)}>
-                  خرج
-                </Chip>
                 <Chip tone="mint" active={donutType === 1} onClick={() => setDonutType(1)}>
                   درآمد
+                </Chip>
+                <Chip tone="rose" active={donutType === 0} onClick={() => setDonutType(0)}>
+                  خرج
                 </Chip>
               </div>
             }
@@ -279,11 +279,11 @@ export default function ReportsPage() {
             title={memberType === 0 ? "چه کسی خرج کرد؟" : "چه کسی درآمد داشت؟"}
             action={
               <div className="flex gap-2">
-                <Chip tone="rose" active={memberType === 0} onClick={() => setMemberType(0)}>
-                  خرج
-                </Chip>
                 <Chip tone="mint" active={memberType === 1} onClick={() => setMemberType(1)}>
                   درآمد
+                </Chip>
+                <Chip tone="rose" active={memberType === 0} onClick={() => setMemberType(0)}>
+                  خرج
                 </Chip>
               </div>
             }

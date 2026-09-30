@@ -330,8 +330,8 @@ export default function SettingsPage() {
           {shownCats.map((c, i) => (
             <div key={c.id} className="group flex items-center gap-3 rounded-2xl border border-line p-2.5">
               <span
-                className="grid size-9 shrink-0 place-items-center rounded-2xl text-base"
-                style={{ background: c.type === 1 ? "#D5F2E5" : "#FCDAE3" }}
+                className="grid size-9 shrink-0 place-items-center rounded-2xl text-base bg-mint-soft dark:bg-[#12362b]"
+                style={c.type === 1 ? undefined : { background: "var(--color-rose-soft)" }}
               >
                 {c.emoji}
               </span>

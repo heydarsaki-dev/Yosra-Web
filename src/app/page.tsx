@@ -1,18 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
+  balance,
   categorySlices,
+  debtAmountAt,
+  debtMonthAt,
+  debtMonths,
   debtStats,
   sortedTrans,
   totalsFor,
   useStore,
 } from "@/lib/store";
 import { fa, jParts, money, monthName, nice, useNow } from "@/lib/jalali";
-import type { Trans } from "@/lib/types";
+import type { Trans, TxType } from "@/lib/types";
 import { BarsChart, Donut, ProgressRow, Sparkline } from "@/components/charts";
-import { Card, Btn, Empty, SectionTitle, Title } from "@/components/ui";
+import { Card, Btn, Chip, Empty, SectionTitle, Title } from "@/components/ui";
 import { TransactionRow, useTxModal } from "@/components/TransactionModal";
 import {
   ChevronLeftIcon,
@@ -33,6 +37,10 @@ export default function DashboardPage() {
 
   const now = useNow();
   const nowJ = jParts(now);
+
+  /** نوع گزارش‌های ردیف سوم — درآمد اول، خرج دوم */
+  const [reportType, setReportType] = useState<TxType>(1);
+  const [memberType, setMemberType] = useState<TxType>(1);
 
   const stats = useMemo(() => {
     const week: { label: string; inc: number; exp: number }[] = [];
@@ -73,11 +81,16 @@ export default function DashboardPage() {
     return { week, expSpark, monthTrans, byMember };
   }, [db, nowJ]);
 
-  const catSlices = categorySlices(stats.monthTrans, 0, new Map(db.categories.map((c) => [c.id, c])));
+  const cats = useMemo(() => new Map(db.categories.map((c) => [c.id, c])), [db.categories]);
+  const catSlices = categorySlices(stats.monthTrans, reportType, cats);
   const maxCat = Math.max(1, ...catSlices.map((s) => s.value));
   const totalExpMonth = stats.monthTrans
     .filter((x) => x.type === 0)
     .reduce((s, x) => s + x.amount, 0);
+  const totalIncMonth = stats.monthTrans
+    .filter((x) => x.type === 1)
+    .reduce((s, x) => s + x.amount, 0);
+  const reportTotal = reportType === 1 ? totalIncMonth : totalExpMonth;
 
   const move = (list: Trans[], from: number, to: number) => {
     const ids = list.map((x) => x.id);
@@ -92,6 +105,29 @@ export default function DashboardPage() {
     toast("حذف شد ✓");
   };
 
+  /** پرداخت سریع قسط سررسید این ماه — مستقیم از داشبورد */
+  const payNextDue = () => {
+    if (debts.dueCount === 0) return;
+    for (const d of db.debts) {
+      const months = debtMonths(d);
+      for (let i = 1; i <= months; i++) {
+        const paid = db.debtPaid.some((p) => p.debtId === d.id && p.idx === i);
+        if (paid) continue;
+        const m = debtMonthAt(d, i);
+        if (m.y !== nowJ[0] || m.m !== nowJ[1]) continue;
+        const amount = debtAmountAt(d, i);
+        const avail = balance(db);
+        if (amount > avail) {
+          toast(`موجودی کافی نیست! موجودی فعلی: ${money(avail)} تومان`, "error");
+          return;
+        }
+        dispatch({ type: "payDebt", payload: { debtId: d.id, idx: i } });
+        toast(`قسط «${d.name}» معادل ${money(amount)} تومان پرداخت شد ✅`);
+        return;
+      }
+    }
+  };
+
   return (
     <div className="space-y-5">
       <Title text="داشبورد" />
@@ -99,7 +135,10 @@ export default function DashboardPage() {
       {/* ------------------------------ ردیف اول ------------------------------ */}
       <div className="grid gap-5 lg:grid-cols-3">
         {/* موجودی */}
-        <Card className="relative overflow-hidden bg-gradient-to-bl from-brand to-brand-2 p-6 text-white lg:col-span-1" delay={0}>
+        <Card
+          className="relative overflow-hidden bg-gradient-to-bl from-brand to-brand-2 p-5 text-white lg:col-span-1 lg:p-6"
+          delay={0}
+        >
           <div className="pointer-events-none absolute -left-10 -top-10 size-40 rounded-full bg-white/15 blur-2xl" />
           <div className="pointer-events-none absolute -bottom-16 -right-6 size-44 rounded-full bg-white/10 blur-2xl" />
 
@@ -111,7 +150,7 @@ export default function DashboardPage() {
           </div>
 
           <p className="relative mt-3 flex items-baseline gap-1.5 leading-tight">
-            <span className="num text-[30px] font-black">{money(t.balance)}</span>
+            <span className="num text-[26px] font-black sm:text-[30px]">{money(t.balance)}</span>
             <span className="text-sm font-bold opacity-80">تومان</span>
           </p>
 
@@ -136,7 +175,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* امروز */}
-        <Card className="p-6" delay={80}>
+        <Card className="p-5 lg:p-6" delay={80}>
           <SectionTitle
             icon={<WalletIcon size={18} />}
             title={`امروز • ${nice(now)}`}
@@ -145,11 +184,15 @@ export default function DashboardPage() {
           <div className="mt-4 grid grid-cols-2 gap-3">
             <div className="rounded-2xl border border-mint/20 bg-mint-soft p-4">
               <span className="text-[11.5px] font-bold text-mint">درآمد امروز</span>
-              <p className="num mt-1.5 text-lg font-black text-mint">{money(t.todayIn)}</p>
+              <p className="num mt-1.5 text-base font-black text-mint sm:text-lg">
+                {money(t.todayIn)}
+              </p>
             </div>
             <div className="rounded-2xl border border-rose/20 bg-rose-soft p-4">
               <span className="text-[11.5px] font-bold text-rose">خرج امروز</span>
-              <p className="num mt-1.5 text-lg font-black text-rose">{money(t.todayOut)}</p>
+              <p className="num mt-1.5 text-base font-black text-rose sm:text-lg">
+                {money(t.todayOut)}
+              </p>
             </div>
           </div>
           <div className="mt-4 rounded-2xl bg-canvas p-3">
@@ -166,7 +209,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* بدهی */}
-        <Card className="p-6" delay={160}>
+        <Card className="p-5 lg:p-6" delay={160}>
           <SectionTitle
             icon={<DebtIcon size={18} />}
             title="بدهی و اقساط"
@@ -211,7 +254,15 @@ export default function DashboardPage() {
                 مدیریت بدهی‌ها
               </Btn>
             </Link>
-            <Btn onClick={() => open({ type: 0 })}>ثبت خرج</Btn>
+            {debts.dueCount > 0 ? (
+              <Btn variant="success" onClick={payNextDue} title="پرداخت قسط سررسید این ماه">
+                💵 پرداخت قسط
+              </Btn>
+            ) : (
+              <Btn onClick={() => open({ type: 0 })} title="ثبت خرج جدید">
+                ＋ ثبت خرج
+              </Btn>
+            )}
           </div>
         </Card>
       </div>
@@ -230,7 +281,7 @@ export default function DashboardPage() {
               </Link>
             }
           />
-          <div className="mt-3 space-y-1 px-3 pb-4">
+          <div className="mt-3 space-y-1 px-2 pb-4 sm:px-3">
             {latest.length === 0 ? (
               <Empty
                 emoji="🪄"
@@ -261,7 +312,7 @@ export default function DashboardPage() {
 
         <Card delay={120}>
           <SectionTitle title="ترند ۷ روز اخیر" sub="درآمد در برابر خرج، روزبه‌روز" />
-          <div className="px-4 pb-5">
+          <div className="px-3 pb-5 sm:px-4">
             <BarsChart data={stats.week} height={190} />
           </div>
         </Card>
@@ -270,12 +321,35 @@ export default function DashboardPage() {
       {/* ------------------------------ ردیف سوم ------------------------------ */}
       <div className="grid gap-5 lg:grid-cols-3">
         <Card delay={60}>
-          <SectionTitle title="ترکیب خرج این ماه" sub="به تفکیک دسته‌بندی 🍩" />
+          <SectionTitle
+            title="ترکیب این ماه"
+            sub={`به تفکیک دسته‌بندی ${reportType === 1 ? "درآمد" : "خرج"} 🍩`}
+            action={
+              <div className="flex gap-2">
+                <Chip
+                  tone="mint"
+                  active={reportType === 1}
+                  onClick={() => setReportType(1)}
+                  className="px-3 py-1.5 text-[12px]"
+                >
+                  درآمد
+                </Chip>
+                <Chip
+                  tone="rose"
+                  active={reportType === 0}
+                  onClick={() => setReportType(0)}
+                  className="px-3 py-1.5 text-[12px]"
+                >
+                  خرج
+                </Chip>
+              </div>
+            }
+          />
           <div className="px-5 pb-6 pt-4">
             <Donut
               slices={catSlices}
-              centerTop={money(totalExpMonth)}
-              centerSub={`خرج ${monthName(nowJ[1])}`}
+              centerTop={money(reportTotal)}
+              centerSub={`${reportType === 1 ? "درآمد" : "خرج"} ${monthName(nowJ[1])}`}
             />
             <div className="mt-4 space-y-2.5">
               {catSlices.slice(0, 5).map((s) => (
@@ -288,14 +362,39 @@ export default function DashboardPage() {
                 </div>
               ))}
               {catSlices.length === 0 && (
-                <p className="text-center text-xs text-faint">هنوز خرجی ثبت نشده</p>
+                <p className="text-center text-xs text-faint">
+                  هنوز {reportType === 1 ? "درآمدی" : "خرجی"} ثبت نشده
+                </p>
               )}
             </div>
           </div>
         </Card>
 
         <Card delay={140}>
-          <SectionTitle title="بیشترین خرج این ماه" sub="دسته‌بندی‌ها بر حسب سهم" />
+          <SectionTitle
+            title={`بیشترین ${reportType === 1 ? "درآمد" : "خرج"} این ماه`}
+            sub="دسته‌بندی‌ها بر حسب سهم"
+            action={
+              <div className="flex gap-2">
+                <Chip
+                  tone="mint"
+                  active={reportType === 1}
+                  onClick={() => setReportType(1)}
+                  className="px-3 py-1.5 text-[12px]"
+                >
+                  درآمد
+                </Chip>
+                <Chip
+                  tone="rose"
+                  active={reportType === 0}
+                  onClick={() => setReportType(0)}
+                  className="px-3 py-1.5 text-[12px]"
+                >
+                  خرج
+                </Chip>
+              </div>
+            }
+          />
           <div className="space-y-4 px-5 pb-6 pt-4">
             {catSlices.slice(0, 6).map((s) => (
               <ProgressRow
@@ -309,26 +408,59 @@ export default function DashboardPage() {
               />
             ))}
             {catSlices.length === 0 && (
-              <p className="py-8 text-center text-xs text-faint">هنوز داده‌ای نیست</p>
+              <p className="py-8 text-center text-xs text-faint">
+                هنوز {reportType === 1 ? "درآمدی" : "خرجی"} ثبت نشده
+              </p>
             )}
           </div>
         </Card>
 
         <Card delay={220}>
-          <SectionTitle title="به تفکیک کاربر" sub={`خرج و درآمد ${monthName(nowJ[1])}`} />
+          <SectionTitle
+            title="به تفکیک کاربر"
+            sub={`${memberType === 1 ? "درآمد" : "خرج"} ${monthName(nowJ[1])}`}
+            action={
+              <div className="flex gap-2">
+                <Chip
+                  tone="mint"
+                  active={memberType === 1}
+                  onClick={() => setMemberType(1)}
+                  className="px-3 py-1.5 text-[12px]"
+                >
+                  درآمد
+                </Chip>
+                <Chip
+                  tone="rose"
+                  active={memberType === 0}
+                  onClick={() => setMemberType(0)}
+                  className="px-3 py-1.5 text-[12px]"
+                >
+                  خرج
+                </Chip>
+              </div>
+            }
+          />
           <div className="space-y-4 px-5 pb-6 pt-4">
-            {stats.byMember.map(({ m, spent, income }) => (
-              <ProgressRow
-                key={m.id}
-                emoji={m.emoji}
-                label={m.name}
-                value={spent}
-                unit="تومان"
-                pct={totalExpMonth > 0 ? (spent / totalExpMonth) * 100 : 0}
-                color={m.color}
-                sub={`درآمد: ${money(income)} تومان`}
-              />
-            ))}
+            {stats.byMember.map(({ m, spent, income }) => {
+              const val = memberType === 1 ? income : spent;
+              const total = memberType === 1 ? totalIncMonth : totalExpMonth;
+              return (
+                <ProgressRow
+                  key={m.id}
+                  emoji={m.emoji}
+                  label={m.name}
+                  value={val}
+                  unit="تومان"
+                  pct={total > 0 ? (val / total) * 100 : 0}
+                  color={m.color}
+                  sub={
+                    memberType === 1
+                      ? `خرج: ${money(spent)} تومان`
+                      : `درآمد: ${money(income)} تومان`
+                  }
+                />
+              );
+            })}
           </div>
         </Card>
       </div>

@@ -44,29 +44,31 @@ export default function DebtsPage() {
     <div className="space-y-5">
       <Title text="بدهی و اقساط" />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         {kpis.map((k, i) => (
-          <Card key={k.label} className="p-5" delay={i * 70}>
+          <Card key={k.label} className="p-4 lg:p-5" delay={i * 70}>
             <div className="flex items-center justify-between">
-              <span className="text-[12.5px] text-muted">{k.label}</span>
+              <span className="text-[11.5px] text-muted sm:text-[12.5px]">{k.label}</span>
               <span className={`size-8 rounded-xl ${k.bg}`} />
             </div>
-            <p className={`mt-2 flex items-baseline justify-start gap-1.5 text-xl font-black ${k.cls}`}>
+            <p
+              className={`mt-2 flex items-baseline justify-start gap-1 text-lg font-black sm:text-xl ${k.cls}`}
+            >
               <span className="num">{money(k.value)}</span>
-              <span className="text-sm font-bold opacity-70">تومان</span>
+              <span className="text-xs font-bold opacity-70 sm:text-sm">تومان</span>
             </p>
           </Card>
         ))}
 
-        <Card className="p-5" delay={210}>
+        <Card className="p-4 lg:p-5" delay={210}>
           <div className="flex items-center justify-between">
-            <span className="text-[12.5px] text-muted">طلبکارها</span>
+            <span className="text-[11.5px] text-muted sm:text-[12.5px]">طلبکارها</span>
             <span className="grid size-8 place-items-center rounded-xl bg-gold-soft text-gold">
               <DebtIcon size={16} />
             </span>
           </div>
-          <p className="num mt-2 text-xl font-black text-ink">{fa(db.debts.length)}</p>
-          <p className="mt-1 text-[11.5px] text-faint">
+          <p className="num mt-2 text-lg font-black text-ink sm:text-xl">{fa(db.debts.length)}</p>
+          <p className="mt-1 text-[11px] text-faint sm:text-[11.5px]">
             {fa(stats.dueCount)} قسط سررسید این ماه
           </p>
         </Card>

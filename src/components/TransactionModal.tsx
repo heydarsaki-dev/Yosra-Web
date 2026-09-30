@@ -227,20 +227,20 @@ function TransactionForm({
     <>
       <div className="flex gap-3">
         <button
-          onClick={() => changeType(0)}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-black transition ${
-            type === 0 ? "border-rose bg-rose-soft text-rose" : "border-line text-muted"
-          }`}
-        >
-          <ExpenseIcon size={17} /> خرج
-        </button>
-        <button
           onClick={() => changeType(1)}
           className={`flex flex-1 items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-black transition ${
             type === 1 ? "border-mint bg-mint-soft text-mint" : "border-line text-muted"
           }`}
         >
           <IncomeIcon size={17} /> درآمد
+        </button>
+        <button
+          onClick={() => changeType(0)}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-black transition ${
+            type === 0 ? "border-rose bg-rose-soft text-rose" : "border-line text-muted"
+          }`}
+        >
+          <ExpenseIcon size={17} /> خرج
         </button>
       </div>
 
@@ -308,7 +308,7 @@ function TransactionForm({
       <div className="mt-4 grid grid-cols-2 gap-3">
         <button
           onClick={() => setShowCal(true)}
-          className="flex items-center justify-center gap-2 rounded-2xl border border-line bg-white px-3 py-3 text-[13px] font-bold text-ink transition hover:border-brand"
+          className="flex items-center justify-center gap-2 rounded-2xl border border-line bg-card px-3 py-3 text-[13px] font-bold text-ink transition hover:border-brand"
         >
           <CalendarIcon size={16} className="text-brand" />
           <span className="num">{fa(date.d)}</span> {monthName(date.m)}{" "}
@@ -316,7 +316,7 @@ function TransactionForm({
         </button>
         <button
           onClick={() => setShowTime(true)}
-          className="flex items-center justify-center gap-2 rounded-2xl border border-line bg-white px-3 py-3 text-[13px] font-bold text-ink transition hover:border-brand"
+          className="flex items-center justify-center gap-2 rounded-2xl border border-line bg-card px-3 py-3 text-[13px] font-bold text-ink transition hover:border-brand"
         >
           <ClockIcon size={16} className="text-brand" />
           <span className="num">
@@ -483,7 +483,7 @@ export function TransactionRow({
               <button
                 onClick={() => index > 0 && onMove(index, index - 1)}
                 disabled={index === 0}
-                className="grid size-7 place-items-center rounded-lg text-faint transition hover:bg-line hover:text-ink disabled:opacity-30"
+                className="hidden size-7 place-items-center rounded-lg text-faint transition hover:bg-line hover:text-ink disabled:opacity-30 sm:grid"
                 title="بالا"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -493,7 +493,7 @@ export function TransactionRow({
               <button
                 onClick={() => index < (total ?? 0) - 1 && onMove(index, index + 1)}
                 disabled={index >= (total ?? 0) - 1}
-                className="grid size-7 place-items-center rounded-lg text-faint transition hover:bg-line hover:text-ink disabled:opacity-30"
+                className="hidden size-7 place-items-center rounded-lg text-faint transition hover:bg-line hover:text-ink disabled:opacity-30 sm:grid"
                 title="پایین"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
