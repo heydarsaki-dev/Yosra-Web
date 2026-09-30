@@ -109,7 +109,7 @@ export default function DashboardPage() {
       <div className="grid gap-5 lg:grid-cols-3">
         {/* موجودی */}
         <Card
-          className="relative overflow-hidden bg-gradient-to-bl from-brand to-brand-2 p-5 text-white lg:col-span-1 lg:p-6"
+          className="relative overflow-hidden bg-gradient-to-bl from-brand to-brand-2 p-5 text-white dark:from-[#4a3fa0] dark:to-[#6d4fd8] lg:col-span-1 lg:p-6"
           delay={0}
         >
           <div className="pointer-events-none absolute -left-10 -top-10 size-40 rounded-full bg-white/15 blur-2xl" />
