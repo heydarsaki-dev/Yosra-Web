@@ -106,7 +106,7 @@ export default function DashboardPage() {
       <Title text="داشبورد" />
 
       {/* ------------------------------ ردیف اول ------------------------------ */}
-      <div className="grid gap-5 lg:grid-cols-4">
+      <div className="grid gap-5 lg:grid-cols-3">
         {/* موجودی */}
         <Card
           className="relative overflow-hidden bg-gradient-to-bl from-brand to-brand-2 p-5 text-white lg:col-span-1 lg:p-6"
@@ -182,7 +182,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* بدهی */}
-        <Card className="p-5 lg:col-span-2 lg:p-6" delay={160}>
+        <Card className="p-5 lg:p-6" delay={160}>
           <SectionTitle
             icon={<DebtIcon size={18} />}
             title="بدهی و اقساط"
@@ -198,18 +198,18 @@ export default function DashboardPage() {
             }
           />
 
-          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-center">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-2xl bg-canvas p-4">
-                <span className="text-[11.5px] text-muted">بدهی باقی‌مانده</span>
-                <p className="num mt-1 text-lg font-black text-rose sm:text-xl">{money(debts.left)}</p>
-              </div>
-              <div className="rounded-2xl bg-canvas p-4">
-                <span className="text-[11.5px] text-muted">پرداخت‌شده</span>
-                <p className="num mt-1 text-lg font-black text-mint sm:text-xl">{money(debts.paid)}</p>
-              </div>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="rounded-2xl bg-canvas p-3.5">
+              <span className="text-[11.5px] text-muted">بدهی باقی‌مانده</span>
+              <p className="num mt-1 text-[17px] font-black text-rose">{money(debts.left)}</p>
             </div>
+            <div className="rounded-2xl bg-canvas p-3.5">
+              <span className="text-[11.5px] text-muted">پرداخت‌شده</span>
+              <p className="num mt-1 text-[17px] font-black text-mint">{money(debts.paid)}</p>
+            </div>
+          </div>
 
+          <div className="mt-4">
             <ProgressRow
               emoji="💳"
               label={`کل بدهی ${money(debts.total)} تومان`}

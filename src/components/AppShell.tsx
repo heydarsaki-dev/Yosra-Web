@@ -50,12 +50,14 @@ function Logo() {
   );
 }
 
-/** دکمهٔ تعویض تم با حالت过渡 */
+/** دکمهٔ تعویض تم — suppressHydrationWarning چون تم اولیه فقط در کلاینت
+ *  (از localStorage/prefers-color-scheme) تعیین می‌شود و با رندر سرور متفاوت است. */
 function ThemeToggle() {
   const { theme, toggle } = useTheme();
   return (
     <button
       onClick={toggle}
+      suppressHydrationWarning
       aria-label={theme === "dark" ? "حالت روشن" : "حالت تیره"}
       title={theme === "dark" ? "حالت روشن ☀️" : "حالت تیره 🌙"}
       className="grid size-10 shrink-0 place-items-center rounded-xl border border-line bg-card text-muted transition hover:text-brand active:scale-95 dark:text-gold"
