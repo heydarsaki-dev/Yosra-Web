@@ -16,7 +16,7 @@ import { DEBT_CAT_EMOJI, DEBT_CAT_NAME } from "./types";
 import { emptyDB, initialDB } from "./seed";
 import { fa, jParts, monthName } from "./jalali";
 import { pullDB, pushDB, remoteTime, isValidDB } from "./github";
-import { clearOutbox, loadOutbox, logChange, replayOutbox } from "./outbox";
+import { clearEntries, clearOutbox, loadOutbox, logChange, replayOutbox } from "./outbox";
 const KEY = "yosra-db-v1";
 
 /** محاسبهٔ seq بعد از بازیابی — جلوگیری از تداخل شناسه‌ها */
@@ -107,6 +107,7 @@ function reducerInner(db: DBShape, a: Action): DBShape {
         ...db,
         transactions: db.transactions.filter((t) => t.id !== a.payload),
         debtPaid: db.debtPaid.filter((p) => p.txId !== a.payload),
+        instPaid: db.instPaid.filter((p) => p.txId !== a.payload),
       };
 
     case "reorderTrans": {
@@ -279,6 +280,13 @@ function logOutbox(a: Action, next: DBShape, before: DBShape): void {
       logChange("transactions", String(a.payload.id), 1, a.payload.patch);
       break;
     case "deleteTrans":
+      // حذف آبشاری ردیف‌های وابسته — مطابق Db.deleteTrans اندروید
+      for (const p of before.debtPaid.filter((x) => x.txId === a.payload)) {
+        logChange("debt_paid", `${p.debtId},${p.idx}`, 2);
+      }
+      for (const p of before.instPaid.filter((x) => x.txId === a.payload)) {
+        logChange("inst_paid", `${p.instId},${p.y},${p.m}`, 2);
+      }
       logChange("transactions", String(a.payload), 2);
       break;
     case "reorderTrans":
@@ -364,6 +372,8 @@ function logOutbox(a: Action, next: DBShape, before: DBShape): void {
 
 function reducer(db: DBShape, a: Action): DBShape {
   const next = reducerInner(db, a);
+  // جایگزینی کل داده (بازنشانی/بازیابی بکاپ) → صف قبلی دیگر اعتباری ندارد
+  if (a.type === "replaceAll" && next !== db) clearOutbox();
   if (next !== db && DATA_ACTIONS.has(a.type)) {
     logOutbox(a, next, db);
     return { ...next, lastModified: Date.now(), demoUntouched: false };
@@ -591,35 +601,50 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const syncBusy = useRef(false);
   const skipNextAutoPush = useRef(false);
 
+  /** دریافت نسخهٔ آنلاین و اعمال outbox محلی روی آن (بدون از دست رفتن تغییرات) */
+  const pullMerge = async (token: string, lastSync: number) => {
+    const remote = await pullDB(token);
+    if (!isValidDB(remote)) throw new Error("⚠️ فایل بکاپ نامعتبر است");
+    // snapshot بعد از دریافت گرفته می‌شود تا تغییراتِ حینِ دریافت هم replay شوند
+    const snapshot = loadOutbox();
+    const merged = replayOutbox({ ...emptyDB(), ...remote }, snapshot);
+    merged.seq = computeSeq(merged);
+    // lastSync قبلی نگه داشته می‌شود تا اگر آپلود شکست خورد دوباره تلاش شود
+    return { merged, snapshot, payload: { ...merged, token, lastSync } };
+  };
+
   const syncPush = useCallback(async () => {
     const cur = dbRef.current;
     if (!cur.token || syncBusy.current) return false;
     syncBusy.current = true;
+    // لحظهٔ شروع — ویرایش‌های هنگام سینک باید dirty بمانند
+    const startedAt = Date.now();
     try {
-      // آنلاین جدیدتر است → دریافت، اعمال outbox، سپس آپلود نتیجه (ادغام)
       const rt = await remoteTime(cur.token);
-      if (rt > cur.lastSync + 60_000) {
-        const remote = await pullDB(cur.token);
-        if (isValidDB(remote)) {
-          const merged = replayOutbox(
-            { ...emptyDB(), ...remote },
-            loadOutbox(),
-          );
+      // state تازه — شامل ویرایش‌هایی که حینِ remoteTime ثبت شده‌اند
+      const latest = dbRef.current;
+      // تغییرات آپلودنشده + ریموت جدیدتر → هرگز بازنویسی کور ممنوع
+      if (latest.lastModified > latest.lastSync && rt > latest.lastSync) {
+        const { merged, snapshot, payload } = await pullMerge(cur.token, latest.lastSync);
+        if (snapshot.length > 0) {
           skipNextAutoPush.current = true;
-          dispatch({
-            type: "syncOn",
-            payload: { ...merged, token: cur.token, lastSync: Date.now() },
-          });
+          dispatch({ type: "syncOn", payload });
           await pushDB(cur.token, merged);
-          clearOutbox(); // فقط بعد از آپلود موفق
+          clearEntries(snapshot); // فقط بعد از آپلود موفق
+          dispatch({ type: "setLastSync", payload: startedAt });
           return true;
         }
-        // دریافت ناموفق → outbox نگه داشته می‌شود، دفعهٔ بعد تلاش می‌شود
+        // فقط ردیفِ خالی — state محلی دست‌نخورده بماند، آپلودِ بعدی انجام می‌شود
+        skipNextAutoPush.current = true;
+        dispatch({ type: "syncOn", payload: { ...payload, lastSync: startedAt } });
+        return true;
       }
-      // آنلاین قدیمی‌تر یا مساوی → آپلود ساده
-      await pushDB(cur.token, cur);
-      clearOutbox();
-      dispatch({ type: "setLastSync", payload: Date.now() });
+      // آنلاین قدیمی‌تر/مساوی → آپلود ساده (snapshot قبل از push خوانده شده تا
+      // ورودی‌های تازهٔ حینِ آپلود پاک نشوند)
+      const snapshot = loadOutbox();
+      await pushDB(cur.token, latest);
+      clearEntries(snapshot);
+      dispatch({ type: "setLastSync", payload: startedAt });
       return true;
     } catch (e) {
       toast(e instanceof Error ? e.message : "خطا در آپلود ❌", "error");
@@ -634,16 +659,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const cur = dbRef.current;
       if (!cur.token || syncBusy.current) return false;
       syncBusy.current = true;
+      const startedAt = Date.now();
       try {
-        const remote = await pullDB(cur.token);
-        if (!isValidDB(remote)) throw new Error("⚠️ فایل بکاپ نامعتبر است");
-        // توکن محلی حفظ شود — بکاپ شاملش نیست
-        const next: DBShape = { ...emptyDB(), ...remote, token: cur.token };
-        next.seq = computeSeq(next);
+        const { merged, snapshot, payload } = await pullMerge(cur.token, cur.lastSync);
         skipNextAutoPush.current = true;
-        // کاربر صراحتاً نسخهٔ آنلاین را خواسته → تغییرات محلی دیگر لازم نیستند
-        clearOutbox();
-        dispatch({ type: "syncOn", payload: { ...next, lastSync: Date.now() } });
+        if (snapshot.length > 0) {
+          // تغییرات محلی هست → اول state ادغام‌شده، بعد آپلود (replay به‌جای پاک‌سازی)
+          dispatch({ type: "syncOn", payload });
+          await pushDB(cur.token, merged);
+          clearEntries(snapshot);
+          dispatch({ type: "setLastSync", payload: startedAt });
+        } else {
+          dispatch({ type: "syncOn", payload: { ...payload, lastSync: startedAt } });
+        }
         if (!silent) toast("📥 آخرین نسخه دریافت شد");
         return true;
       } catch (e) {
@@ -666,8 +694,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       await syncPush();
       return;
     }
-    // تغییر آپلودنشده → آپلود
-    if (cur.lastModified > cur.lastSync) {
+    // تغییر آپلودنشده یا outboxِ پُر → آپلود
+    if (cur.lastModified > cur.lastSync || loadOutbox().length > 0) {
       await syncPush();
       return;
     }
@@ -706,7 +734,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       skipNextAutoPush.current = false;
       return;
     }
-    if (db.lastModified <= db.lastSync) return;
+    if (db.lastModified <= db.lastSync && loadOutbox().length === 0) return;
     if (pushTimer.current) clearTimeout(pushTimer.current);
     pushTimer.current = setTimeout(() => {
       void syncPush();

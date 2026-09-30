@@ -80,6 +80,21 @@ export function clearOutbox(): void {
   }
 }
 
+/**
+ * حذف فقطِ ورودی‌های snapshot شده — برای نگه‌داشتن ورودی‌هایی که حینِ
+ * دریافت/آپلود ثبت شده‌اند (با مقایسهٔ JSON، نه timestamp، تا مقاوم باشد).
+ */
+export function clearEntries(snapshot: OutEntry[]): void {
+  if (snapshot.length === 0) return;
+  const keep = new Set(snapshot.map((e) => JSON.stringify(e)));
+  const rest = read().filter((e) => !keep.has(JSON.stringify(e)));
+  if (rest.length === 0) {
+    clearOutbox();
+    return;
+  }
+  write(rest);
+}
+
 /* ---------------------------- replay ---------------------------- */
 
 const PK_COLS: Record<TableName, string[]> = {
@@ -183,7 +198,9 @@ export function replayOutbox(db: DBShape, entries: OutEntry[]): DBShape {
       const row: AnyRow = { ...(e.r ?? {}) };
       if (pk.length === 1 && pk[0] === "id") {
         const oldId = keyParts[0];
-        const newId = nextId(e.t);
+        // همان آیدیِ قدیمی دوباره درج شده؟ → همان آیدیِ جدید (idempotent)
+        const mapped = maps[e.t]?.get(oldId);
+        const newId = mapped ?? nextId(e.t);
         (maps[e.t] ??= new Map()).set(oldId, newId);
         row.id = newId;
       }
@@ -192,8 +209,11 @@ export function replayOutbox(db: DBShape, entries: OutEntry[]): DBShape {
         const v = row[col];
         if (typeof v === "number") row[col] = remap(parent, v);
       }
+      // معادل CONFLICT_REPLACE اندروید — جلوگیری از ردیفِ تکراریِ کلید مرکب
+      // (تکرارِ کلید مرکب → UNIQUE constraint → آپلود برای همیشه می‌شکند)
+      const wanted = keyOf(row);
       const rows = tableOf(out, e.t);
-      out = setTable(out, e.t, [...rows, row]);
+      out = setTable(out, e.t, [...rows.filter((r) => keyOf(r) !== wanted), row]);
     } else if (e.o === 1) {
       // ویرایش
       const wanted = keyParts.join(",");
