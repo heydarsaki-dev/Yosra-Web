@@ -64,6 +64,10 @@ export async function dbToSqliteBytes(db: DBShape): Promise<Uint8Array> {
     CREATE TABLE debt_paid(debt_id INTEGER NOT NULL, idx INTEGER NOT NULL, tx_id INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(debt_id,idx));
   `);
 
+  // مهم: بدون این، اپ اندروید فایل را نسخهٔ ۰ می‌بیند و onUpgrade را دوباره اجرا
+  // می‌کند (یعنی همهٔ migrationها) که به ساختار نهایی خرابی وارد می‌کند.
+  sq.exec("PRAGMA user_version = 12");
+
   const run = (sql: string, params: SqlValue[] = []) => sq.run(sql, params);
 
   run("BEGIN");
