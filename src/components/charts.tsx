@@ -191,6 +191,7 @@ export function ProgressRow({
   pct,
   color,
   sub,
+  onGradient,
 }: {
   emoji: string;
   label: string;
@@ -201,32 +202,37 @@ export function ProgressRow({
   pct: number;
   color: string;
   sub?: string;
+  /** وقتی روی کارت گرادیان تیره قرار می‌گیرد، متن‌ها و نوار را روشن می‌کند */
+  onGradient?: boolean;
 }) {
   const w = Math.max(2, Math.min(100, pct));
+  const ink = onGradient ? "text-white" : "text-ink";
+  const faint = onGradient ? "text-white/70" : "text-faint";
+  const line = onGradient ? "bg-white/20" : "bg-line";
   return (
     <div className="group">
       <div className="flex items-center justify-between gap-3">
         <span className="flex min-w-0 items-center gap-2">
-          <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-line text-base">
+          <span className={`grid size-8 shrink-0 place-items-center rounded-xl ${line} text-base`}>
             {emoji}
           </span>
-          <span className="truncate text-[13px] font-bold text-ink">{label}</span>
+          <span className={`truncate text-[13px] font-bold ${ink}`}>{label}</span>
         </span>
-        <span className="flex shrink-0 items-baseline gap-1 text-[13px] font-bold text-ink">
+        <span className={`flex shrink-0 items-baseline gap-1 text-[13px] font-bold ${ink}`}>
           <span className="num">{money(value)}</span>
           {unit && <span>{unit}</span>}
         </span>
       </div>
       <div className="mt-2 flex items-center gap-3">
-        <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-line">
+        <div className={`h-2.5 flex-1 overflow-hidden rounded-full ${line}`}>
           <div
-            className="h-full rounded-full transition-all duration-700"
+            className="h-full rounded-full transition-all duration-700 dark:brightness-150"
             style={{ width: `${w}%`, background: `linear-gradient(90deg, ${color}, ${color}aa)` }}
           />
         </div>
-        <span className="num w-10 text-left text-[11px] text-faint">{fa(pct.toFixed(0))}٪</span>
+        <span className={`num w-10 text-left text-[11px] ${faint}`}>{fa(pct.toFixed(0))}٪</span>
       </div>
-      {sub && <p className="mt-1 text-[11px] text-faint">{sub}</p>}
+      {sub && <p className={`mt-1 text-[11px] ${faint}`}>{sub}</p>}
     </div>
   );
 }

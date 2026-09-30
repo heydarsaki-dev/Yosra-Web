@@ -132,6 +132,7 @@ export default function DebtDetailPage() {
             unit={`از ${money(debt.total)} تومان`}
             pct={debt.total > 0 ? (paidAmt / debt.total) * 100 : 0}
             color="#059669"
+            onGradient
           />
         </div>
 
