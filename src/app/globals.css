@@ -1,0 +1,137 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Vazirmatn", ui-sans-serif, system-ui, sans-serif;
+
+  --color-canvas: #f6f7fc;
+  --color-ink: #1a1b2e;
+  --color-muted: #6b7194;
+  --color-faint: #9aa0bc;
+  --color-line: #eef0f8;
+
+  --color-brand: #6c5ce7;
+  --color-brand-deep: #5246d6;
+  --color-brand-2: #9b7bf5;
+  --color-brand-soft: #efedff;
+
+  --color-mint: #059669;
+  --color-mint-soft: #d5f2e5;
+  --color-rose: #e11d48;
+  --color-rose-soft: #fcdae3;
+  --color-gold: #f59e0b;
+  --color-gold-soft: #fef0d5;
+  --color-sky: #00b8d9;
+  --color-sky-soft: #d8f4fb;
+  --color-grape: #9c56d8;
+  --color-grape-soft: #f0e2fc;
+
+  --shadow-soft: 0 10px 30px -18px rgba(26, 27, 46, 0.35);
+  --shadow-lift: 0 24px 50px -24px rgba(108, 92, 231, 0.55);
+
+  --radius-card: 22px;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01";
+  }
+
+  ::selection {
+    background: var(--color-brand);
+    color: #fff;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #dfe2f0;
+    border-radius: 999px;
+    border: 3px solid var(--color-canvas);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #c8cde3;
+  }
+}
+
+@layer components {
+  .card {
+    background: #fff;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .num {
+    font-variant-numeric: tabular-nums;
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
+
+  .fade-up {
+    animation: fadeUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .bar-grow {
+    transform-origin: bottom;
+    animation: barGrow 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes barGrow {
+  from {
+    transform: scaleY(0.05);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.pop-in {
+  animation: popIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.toast-in {
+  animation: toastIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
