@@ -76,7 +76,7 @@ export default function DebtDetailPage() {
 
       {/* سربرگ */}
       <Card
-        className="relative overflow-hidden bg-gradient-to-bl from-brand to-brand-2 p-5 text-white dark:from-[#4a3fa0] dark:to-[#6d4fd8] lg:p-6"
+        className="relative overflow-hidden bg-gradient-to-bl from-brand-deep to-brand p-5 text-white dark:from-[#3a3190] dark:to-[#5a48c4] lg:p-6"
         delay={0}
       >
         <div className="pointer-events-none absolute -left-12 -bottom-12 size-44 rounded-full bg-white/15 blur-2xl" />
