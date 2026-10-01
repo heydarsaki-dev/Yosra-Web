@@ -546,7 +546,7 @@ export function categorySlices(
 export interface ToastMsg {
   id: number;
   text: string;
-  tone: "ok" | "error" | "info";
+  tone: "ok" | "error" | "info" | "success";
 }
 
 interface StoreValue {
@@ -575,7 +575,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dbRef.current = db;
   }, [db]);
 
-  const dispatch = useCallback((a: Action) => setDb((prev) => reducer(prev, a)), []);
+  // نوع آخرین اکشن — برای آپلودِ فوریِ تراکنش‌ها
+  const lastAction = useRef<Action["type"] | null>(null);
+  const dispatch = useCallback((a: Action) => {
+    lastAction.current = a.type;
+    setDb((prev) => reducer(prev, a));
+  }, []);
 
   const toast = useCallback((text: string, tone: ToastMsg["tone"] = "ok") => {
     const id = ++tid.current;
@@ -623,28 +628,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const rt = await remoteTime(cur.token);
       // state تازه — شامل ویرایش‌هایی که حینِ remoteTime ثبت شده‌اند
       const latest = dbRef.current;
-      // تغییرات آپلودنشده + ریموت جدیدتر → هرگز بازنویسی کور ممنوع
-      if (latest.lastModified > latest.lastSync && rt > latest.lastSync) {
-        const { merged, snapshot, payload } = await pullMerge(cur.token, latest.lastSync);
-        if (snapshot.length > 0) {
-          skipNextAutoPush.current = true;
-          dispatch({ type: "syncOn", payload });
-          await pushDB(cur.token, merged);
-          clearEntries(snapshot); // فقط بعد از آپلود موفق
-          dispatch({ type: "setLastSync", payload: startedAt });
-          return true;
-        }
-        // فقط ردیفِ خالی — state محلی دست‌نخورده بماند، آپلودِ بعدی انجام می‌شود
+      const snapshot = loadOutbox();
+      const dirty = latest.lastModified > latest.lastSync || snapshot.length > 0;
+
+      // ریموت جدیدتر + تغییرات محلیِ ثبت‌شده → دریافت، ادغام، آپلود (بازنویسی کور ممنوع)
+      if (snapshot.length > 0 && rt > latest.lastSync) {
+        const { merged, snapshot: fresh, payload } = await pullMerge(cur.token, latest.lastSync);
         skipNextAutoPush.current = true;
-        dispatch({ type: "syncOn", payload: { ...payload, lastSync: startedAt } });
+        dispatch({ type: "syncOn", payload });
+        await pushDB(cur.token, merged);
+        clearEntries(fresh); // فقط بعد از آپلود موفق
+        dispatch({ type: "setLastSync", payload: startedAt });
+        toast("✅ دیتابیس آنلاین به‌روز شد", "success");
         return true;
       }
-      // آنلاین قدیمی‌تر/مساوی → آپلود ساده (snapshot قبل از push خوانده شده تا
-      // ورودی‌های تازهٔ حینِ آپلود پاک نشوند)
-      const snapshot = loadOutbox();
+
+      // چیزی برای آپلود نیست و ریموت هم هست → دست نزن
+      if (!dirty && rt !== 0) return true;
+
+      // آپلود سادهٔ وضعیت محلی (ریموت قدیمی‌تر/مساوی یا هنوز فایلی ندارد)
       await pushDB(cur.token, latest);
       clearEntries(snapshot);
       dispatch({ type: "setLastSync", payload: startedAt });
+      toast("✅ دیتابیس آنلاین به‌روز شد", "success");
       return true;
     } catch (e) {
       toast(e instanceof Error ? e.message : "خطا در آپلود ❌", "error");
@@ -669,6 +675,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           await pushDB(cur.token, merged);
           clearEntries(snapshot);
           dispatch({ type: "setLastSync", payload: startedAt });
+          toast("✅ دیتابیس آنلاین به‌روز شد", "success");
         } else {
           dispatch({ type: "syncOn", payload: { ...payload, lastSync: startedAt } });
         }
@@ -726,19 +733,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     void startSync();
   }, [pathname, ready, startSync]);
 
-  // آپلود خودکار پس از هر تغییر (debounced ۳ ثانیه)
+  // آپلود خودکار پس از هر تغییر — تراکنش‌ها فوری، بقیه debounced ۳ ثانیه
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!ready || !db.token) return;
     if (skipNextAutoPush.current) {
       skipNextAutoPush.current = false;
+      lastAction.current = null;
       return;
     }
-    if (db.lastModified <= db.lastSync && loadOutbox().length === 0) return;
-    if (pushTimer.current) clearTimeout(pushTimer.current);
-    pushTimer.current = setTimeout(() => {
-      void syncPush();
-    }, 3000);
+    if (db.lastModified <= db.lastSync && loadOutbox().length === 0) {
+      lastAction.current = null;
+      return;
+    }
+    const action = lastAction.current;
+    lastAction.current = null;
+    const delay = action && DATA_ACTIONS.has(action) ? 0 : 3000;
+
+    const run = (wait: number, tries = 0) => {
+      if (pushTimer.current) clearTimeout(pushTimer.current);
+      pushTimer.current = setTimeout(() => {
+        // سینک دیگری در حال اجراست → کمی بعد دوباره (وگرنه آپلود گم می‌شود)
+        if (syncBusy.current) {
+          if (tries < 30) run(1000, tries + 1);
+          return;
+        }
+        // شاید همین حالا آپلود شده — دوباره چک کن
+        const cur = dbRef.current;
+        if (cur.lastModified <= cur.lastSync && loadOutbox().length === 0) return;
+        void syncPush();
+      }, wait);
+    };
+    run(delay);
     return () => {
       if (pushTimer.current) {
         clearTimeout(pushTimer.current);

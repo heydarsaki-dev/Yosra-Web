@@ -12,7 +12,7 @@ import {
 import { fa, jParts, money, monthName, nice, useNow } from "@/lib/jalali";
 import type { Trans, TxType } from "@/lib/types";
 import { BarsChart, Donut, ProgressRow, Sparkline } from "@/components/charts";
-import { Card, Btn, Chip, Empty, SectionTitle, Title } from "@/components/ui";
+import { Card, Btn, Chip, Confirm, Empty, SectionTitle, Title } from "@/components/ui";
 import { TransactionRow, useTxModal } from "@/components/TransactionModal";
 import {
   ChevronLeftIcon,
@@ -37,6 +37,7 @@ export default function DashboardPage() {
   /** نوع گزارش‌های ردیف سوم — درآمد اول، خرج دوم */
   const [reportType, setReportType] = useState<TxType>(1);
   const [memberType, setMemberType] = useState<TxType>(1);
+  const [toDelete, setToDelete] = useState<Trans | null>(null);
 
   const stats = useMemo(() => {
     const week: { label: string; inc: number; exp: number }[] = [];
@@ -96,10 +97,7 @@ export default function DashboardPage() {
     toast("ترتیب تغییر کرد ⠿", "info");
   };
 
-  const deleteTx = (x: Trans) => {
-    dispatch({ type: "deleteTrans", payload: x.id });
-    toast("حذف شد ✓");
-  };
+  const deleteTx = (x: Trans) => setToDelete(x);
 
   return (
     <div className="space-y-5">
@@ -428,6 +426,19 @@ export default function DashboardPage() {
           </div>
         </Card>
       </div>
+
+      <Confirm
+        open={toDelete !== null}
+        message={`تراکنش «${toDelete ? (cats.get(toDelete.catId)?.name ?? "سایر") : ""}» حذف بشه؟ این عملیات برگشت‌پذیر نیست.`}
+        onYes={() => {
+          if (toDelete) {
+            dispatch({ type: "deleteTrans", payload: toDelete.id });
+            toast("حذف شد ✓");
+          }
+          setToDelete(null);
+        }}
+        onNo={() => setToDelete(null)}
+      />
     </div>
   );
 }

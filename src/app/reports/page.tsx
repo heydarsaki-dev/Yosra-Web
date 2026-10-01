@@ -12,9 +12,9 @@ import {
   monthName,
   useNow,
 } from "@/lib/jalali";
-import type { TxType } from "@/lib/types";
+import type { Trans, TxType } from "@/lib/types";
 import { BarsChart, Donut, ProgressRow } from "@/components/charts";
-import { Card, Chip, Empty, SectionTitle, Title } from "@/components/ui";
+import { Card, Chip, Confirm, Empty, SectionTitle, Title } from "@/components/ui";
 import { TransactionRow, useTxModal } from "@/components/TransactionModal";
 import {
   ChartIcon,
@@ -42,6 +42,7 @@ export default function ReportsPage() {
   });
   const [donutType, setDonutType] = useState<TxType>(1);
   const [memberType, setMemberType] = useState<TxType>(1);
+  const [toDelete, setToDelete] = useState<Trans | null>(null);
 
   const nowJ = jParts(useNow());
 
@@ -127,10 +128,7 @@ export default function ReportsPage() {
       ? fmtPeriodDay(dayTs)
       : `${monthName(ym.m)} ${fa(ym.y)}`;
 
-  const deleteTx = (id: number) => {
-    dispatch({ type: "deleteTrans", payload: id });
-    toast("حذف شد ✓");
-  };
+  const deleteTx = (t: Trans) => setToDelete(t);
 
   return (
     <div className="space-y-5">
@@ -318,7 +316,7 @@ export default function ReportsPage() {
                   key={t.id}
                   t={t}
                   onEdit={() => open({ edit: t, type: t.type })}
-                  onDelete={() => deleteTx(t.id)}
+                  onDelete={() => deleteTx(t)}
                   showHandle={false}
                 />
               ))
@@ -326,6 +324,19 @@ export default function ReportsPage() {
           </div>
         </Card>
       )}
+
+      <Confirm
+        open={toDelete !== null}
+        message={`تراکنش «${toDelete ? (cats.get(toDelete.catId)?.name ?? "سایر") : ""}» حذف بشه؟ این عملیات برگشت‌پذیر نیست.`}
+        onYes={() => {
+          if (toDelete) {
+            dispatch({ type: "deleteTrans", payload: toDelete.id });
+            toast("حذف شد ✓");
+          }
+          setToDelete(null);
+        }}
+        onNo={() => setToDelete(null)}
+      />
     </div>
   );
 }

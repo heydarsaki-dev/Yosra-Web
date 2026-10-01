@@ -109,9 +109,11 @@ function Toasts() {
           className={`toast-in max-w-md rounded-2xl px-5 py-3 text-center text-[13px] font-bold text-white shadow-xl ${
             t.tone === "error"
               ? "bg-[#c2183f] dark:bg-[#e0244e]"
-              : t.tone === "info"
-                ? "bg-[#2a2e4a] dark:bg-[#3a3f66]"
-                : "bg-[#1e2138] dark:bg-[#282c4e]"
+              : t.tone === "success"
+                ? "bg-[#15803d] dark:bg-[#22c55e]"
+                : t.tone === "info"
+                  ? "bg-[#2a2e4a] dark:bg-[#3a3f66]"
+                  : "bg-[#1e2138] dark:bg-[#282c4e]"
           }`}
         >
           {t.text}
