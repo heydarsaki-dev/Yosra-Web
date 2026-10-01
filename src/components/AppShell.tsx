@@ -7,6 +7,7 @@ import { useStore } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
 import { nice, jParts, monthName, fa, useNow } from "@/lib/jalali";
 import { TxModalProvider, useTxModal } from "./TransactionModal";
+import { LoginGate } from "./LoginGate";
 import {
   ChartIcon,
   DebtIcon,
@@ -126,7 +127,7 @@ function Toasts() {
 function Shell({ children }: { children: ReactNode }) {
   const path = usePathname();
   const meta = TITLES[path] ?? { title: "یسرا", sub: "" };
-  const { db } = useStore();
+  const { db, ready } = useStore();
   const now = useNow();
   const nowJ = jParts(now);
 
@@ -134,6 +135,27 @@ function Shell({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.documentElement.style.scrollBehavior = "smooth";
   }, []);
+
+  // هنوز از localStorage بارگذاری نشده → اسپلش (مثل SplashActivity)
+  if (!ready) {
+    return (
+      <div className="grid min-h-screen place-items-center">
+        <span className="grid size-14 animate-pulse place-items-center rounded-2xl bg-gradient-to-br from-brand to-brand-2 text-2xl font-black text-white shadow-[0_14px_26px_-14px_rgba(108,92,231,.95)]">
+          ی
+        </span>
+      </div>
+    );
+  }
+
+  // اولِ کار (توکن هنوز باز نشده) → درِ ورود، مثل LoginActivity
+  if (!db.token) {
+    return (
+      <div className="min-h-screen">
+        <LoginGate />
+        <Toasts />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">

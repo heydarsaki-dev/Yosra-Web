@@ -217,7 +217,10 @@ export async function sqliteBytesToDb(bytes: Uint8Array): Promise<DBShape> {
     lastSync: 0,
     token: "",
     seeded: false,
-    lastModified: Date.now(),
+    // صفر، نه Date.now(): این مقدار بعد از هر دریافت در state می‌نشیند و
+    // اگر «الان» باشد، همیشه از lastSync ثبتشده در شروعِ سینک جلوتر است →
+    // وب بعد از هر pull برای همیشه کثیف می‌ماند و آپلودِ کور راه می‌افتد.
+    lastModified: 0,
     demoUntouched: false,
   };
 }

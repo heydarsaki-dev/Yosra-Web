@@ -31,10 +31,37 @@ interface Res {
   data: unknown;
 }
 
-async function req(
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** متن پیام خطا از پاسخ JSON یا متن خام (صفحهٔ WAF) */
+function msgOf(data: unknown): string {
+  if (typeof data === "string") return data.trim();
+  if (typeof data === "object" && data && "message" in data)
+    return String((data as Record<string, unknown>).message).trim();
+  return "";
+}
+
+/**
+ * پاسخ موقت و قابل‌تکرار: قطعی وی‌پیِن/شبکه (status 0)، سقف درخواست (429)
+ * یا ردِ WAF گیت‌هاب موقع عوض شدن ناگهانی IP («malicious request» و مشابه).
+ */
+function isTransient(r: Res): boolean {
+  if (r.status === 0 || r.status === 429) return true;
+  const m = msgOf(r.data).toLowerCase();
+  return (
+    m.includes("malicious") ||
+    m.includes("abuse") ||
+    m.includes("secondary rate") ||
+    m.includes("rate limit")
+  );
+}
+
+async function attempt(
   method: string,
   path: string,
-  body: unknown = null,
+  body: unknown,
   token: string,
 ): Promise<Res> {
   try {
@@ -61,28 +88,50 @@ async function req(
   }
 }
 
-export function githubError(status: number, data: unknown): string {
-  const msg =
-    typeof data === "object" && data && "message" in data
-      ? String((data as Record<string, unknown>).message)
-      : "";
-  switch (status) {
-    case 0:
-      return "اتصال به گیت‌هاب برقرار نشد ❌";
-    case 401:
-      return "توکن نامعتبر است ❌";
-    case 403:
-      return "دسترسی توکن کافی نیست ❌";
-    case 404:
-      return "ریپو یا فایل پیدا نشد ❌";
-    default:
-      return msg ? `${msg} (کد ${status})` : `خطای گیت‌هاب (کد ${status})`;
+async function req(
+  method: string,
+  path: string,
+  body: unknown = null,
+  token: string,
+): Promise<Res> {
+  for (let i = 0; ; i++) {
+    const r = await attempt(method, path, body, token);
+    // PUT تکرار نمی‌شود (پاسخ گم‌شده یعنی شاید اعمال شده — تکرار → 409)
+    if (r.ok || method === "PUT" || i >= 1 || !isTransient(r)) return r;
+    await sleep(r.status === 0 ? 800 : 1500);
   }
 }
+
+export function githubError(status: number, data: unknown): string {
+  const msg = msgOf(data);
+  const lower = msg.toLowerCase();
+  if (status === 0) return "اتصال به گیت‌هاب برقرار نشد ❌";
+  if (status === 401) return "توکن نامعتبر است ❌";
+  if (status === 429)
+    return "گیت‌هاب موقتاً درخواست‌ها را محدود کرده — چند دقیقه بعد دوباره تلاش کن ⏳";
+  if (status === 403) {
+    if (lower.includes("rate limit") || lower.includes("secondary") || lower.includes("abuse"))
+      return "گیت‌هاب موقتاً درخواست‌ها را محدود کرده — چند دقیقه بعد دوباره تلاش کن ⏳";
+    return "دسترسی توکن کافی نیست ❌";
+  }
+  if (status === 404) return "ریپو یا فایل پیدا نشد ❌";
+  if (lower.includes("malicious") || lower.includes("abuse") || msg.startsWith("<"))
+    return "گیت‌هاب درخواست را رد کرد (احتمالاً به‌خاطر عوض شدن ناگهانی وی‌پیِن/IP) — چند لحظه صبر کن و دوباره تلاش کن ⚠️";
+  return msg ? `${msg} (کد ${status})` : `خطای گیت‌هاب (کد ${status})`;
+}
+
+/** کشِ داخل حافظه — هر بار ensureRepo دو درخواست می‌زد؛ سینک هر ۲۰ ثانیه
+ *  و بعد از هر push دوباره صدا می‌زند. کم کردن درخواست = کمتر شدن فرصتِ
+ *  خطا و سقفِ درخواست (مخصوصاً با وی‌پیِن ناپایدار). */
+const repoCache = new Map<string, { login: string; branch: string; at: number }>();
 
 async function ensureRepo(
   token: string,
 ): Promise<{ login: string; branch: string }> {
+  const hit = repoCache.get(token);
+  if (hit && Date.now() - hit.at < 10 * 60_000) {
+    return { login: hit.login, branch: hit.branch };
+  }
   const user = await req("GET", "/user", null, token);
   if (!user.ok) throw new Error(githubError(user.status, user.data));
   const login = (user.data as { login: string }).login;
@@ -98,15 +147,17 @@ async function ensureRepo(
     if (!created.ok && created.status !== 422) {
       throw new Error(githubError(created.status, created.data));
     }
+    repoCache.set(token, { login, branch: "main", at: Date.now() });
     return { login, branch: "main" };
   }
   if (!repo.ok) throw new Error(githubError(repo.status, repo.data));
   const branch = (repo.data as { default_branch?: string }).default_branch || "main";
+  repoCache.set(token, { login, branch, at: Date.now() });
   return { login, branch };
 }
 
-/** آپلود دیتابیس فعلی به گیت‌هاب (در فرمت SQLite اپ اندروید) */
-export async function pushDB(token: string, db: DBShape): Promise<void> {
+/** آپلود دیتابیس فعلی به گیت‌هاب (در فرمت SQLite اپ اندروید) — sha کامیتِ ساخته‌شده */
+export async function pushDB(token: string, db: DBShape): Promise<string> {
   const { login } = await ensureRepo(token);
   const content = bytesToB64(await dbToSqliteBytes(db));
 
@@ -125,10 +176,28 @@ export async function pushDB(token: string, db: DBShape): Promise<void> {
     token,
   );
   if (!put.ok) throw new Error(githubError(put.status, put.data));
+  // sha همان کامیتی که خودمان ساختیم — دوباره خواندن remoteInfo خطرناک است:
+  // اگر طرف دیگر هم‌زمان push کرده باشد، sha او را بدون دیدن محتوایش ثبت می‌کند
+  // و تغییراتش برای همیشه «دیده‌شده» حساب می‌شود (گم شدن داده).
+  try {
+    const commit = (put.data as { commit?: { sha?: string } }).commit;
+    return String(commit?.sha ?? "");
+  } catch {
+    return "";
+  }
 }
 
-/** زمان آخرین کامیت فایل دیتابیس روی گیت‌هاب (میلی‌ثانیه) — ۰ اگر فایلی نیست */
-export async function remoteTime(token: string): Promise<number> {
+export interface RemoteInfo {
+  sha: string;
+  time: number;
+}
+
+/**
+ * آخرین کامیت فایل دیتابیس: sha + زمان.
+ * مقایسهٔ sha (نه زمان) مبنای pull است، چون زمان کامیت دقت ثانیه دارد و دو
+ * کامیتِ پشت‌سرهم در یک ثانیه، با مقایسهٔ زمانی برای همیشه گم می‌شوند.
+ */
+export async function remoteInfo(token: string): Promise<RemoteInfo> {
   const { login } = await ensureRepo(token);
   const c = await req(
     "GET",
@@ -136,11 +205,11 @@ export async function remoteTime(token: string): Promise<number> {
     null,
     token,
   );
-  if (c.status !== 200) return 0;
-  const arr = (c.data as Array<{ commit: { committer: { date: string } } }>) ?? [];
-  if (arr.length === 0) return 0;
+  if (c.status !== 200) return { sha: "", time: 0 };
+  const arr = (c.data as Array<{ sha?: string; commit: { committer: { date: string } } }>) ?? [];
+  if (arr.length === 0) return { sha: "", time: 0 };
   const t = Date.parse(arr[0].commit.committer.date);
-  return Number.isNaN(t) ? 0 : t;
+  return { sha: String(arr[0].sha ?? ""), time: Number.isNaN(t) ? 0 : t };
 }
 
 export function isValidDB(data: unknown): data is DBShape {

@@ -15,8 +15,10 @@ import type { Category, DBShape, Debt, DebtPaid, Member, Trans, TxType } from ".
 import { DEBT_CAT_EMOJI, DEBT_CAT_NAME } from "./types";
 import { emptyDB, initialDB } from "./seed";
 import { fa, jParts, monthName } from "./jalali";
-import { pullDB, pushDB, remoteTime, isValidDB } from "./github";
+import { pullDB, pushDB, remoteInfo, isValidDB } from "./github";
 import { clearEntries, clearOutbox, loadOutbox, logChange, replayOutbox } from "./outbox";
+import { RtClient, rtConfig } from "./realtime";
+export { __setSocketFactoryForTests } from "./realtime";
 const KEY = "yosra-db-v1";
 
 /** محاسبهٔ seq بعد از بازیابی — جلوگیری از تداخل شناسه‌ها */
@@ -27,6 +29,40 @@ function computeSeq(db: DBShape): number {
   for (const d of db.debts) m = Math.max(m, d.id + 1);
   for (const i of db.installments ?? []) m = Math.max(m, i.id + 1);
   return m;
+}
+
+/**
+ * sha آخرین نسخهٔ آنلاینی که دیده‌ایم (کلید جدا در localStorage).
+ * شرط pull با همین مقایسه می‌شود، نه با lastSync و نه با زمان کامیت:
+ *  - lastSync با هر آپلود خودمان جلو می‌رود وگرنه کامیت‌های تازهٔ طرف دیگر
+ *    که بین دو سینک ما ثبت شده‌اند برای همیشه نادیده گرفته می‌شوند؛
+ *  - زمان کامیت دقت ثانیه دارد و دو کامیتِ یک‌ثانیه‌ای با مقایسهٔ زمانی گم می‌شوند.
+ */
+const RS_KEY = "yosra-remote-sha";
+function lastRemoteSha(): string {
+  try {
+    return localStorage.getItem(RS_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+function setRemoteSha(s: string): void {
+  try {
+    if (s) localStorage.setItem(RS_KEY, s);
+  } catch {
+    /* حافظه در دسترس نیست */
+  }
+}
+
+/** کلاینت realtime فعال (ماژول‌اسکوپ تا از همهٔ سینک‌ها خبر بدهد) */
+let rt: RtClient | null = null;
+/** خبر به طرف دیگر که دیتابیس آنلاین را عوض کردیم — best-effort، بلاک نمی‌کند */
+function notifyRemote(): void {
+  try {
+    rt?.notify();
+  } catch {
+    /* نادیده — پولینگ پشتیبان است */
+  }
 }
 
 type Action =
@@ -558,7 +594,8 @@ interface StoreValue {
   replaceAll: (db: DBShape) => void;
   resetAll: (withDemo: boolean) => void;
   syncPush: () => Promise<boolean>;
-  syncPull: (silent?: boolean) => Promise<boolean>;
+  /** knownSha: نسخه‌ای که قرار است دانلود شود (برای ثبت دقیق lastRemote) */
+  syncPull: (silent?: boolean, knownSha?: string) => Promise<boolean>;
 }
 
 const StoreCtx = createContext<StoreValue | null>(null);
@@ -588,10 +625,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3200);
   }, []);
 
-  const replaceAll = useCallback((next: DBShape) => dispatch({ type: "replaceAll", payload: next }), [dispatch]);
+  // نکته: در replaceAll/resetAll توکن فعلی حفظ می‌شود — پاک کردن داده‌ها
+  // یا بازیابی بکاپ نباید کاربر را از حساب خارج کند (درِ ورود دوباره بیاید)
+  const replaceAll = useCallback(
+    (next: DBShape) =>
+      dispatch({ type: "replaceAll", payload: { ...next, token: dbRef.current.token } }),
+    [dispatch],
+  );
 
   const resetAll = useCallback(
-    (withDemo: boolean) => dispatch({ type: "replaceAll", payload: withDemo ? initialDB() : emptyDB() }),
+    (withDemo: boolean) =>
+      dispatch({
+        type: "replaceAll",
+        payload: {
+          ...(withDemo ? initialDB() : emptyDB()),
+          token: dbRef.current.token,
+        },
+      }),
     [dispatch],
   );
 
@@ -600,8 +650,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   /*                                                                    */
   /*  • در اجرای اول: اگر توکن هست، نسخهٔ آنلین اگر جدیدتر باشد دریافت می‌شود
    *    (مگر اینکه دادهٔ محلی دست‌نخوردهٔ نمونه باشد — آن وقت جایگزین می‌شود)
-   *  • هر تغییر در وب → آپلود خودکار (debounced)
-   *  • هر ۶۰ ثانیه و با فوکوس شدن تب → بررسی نسخهٔ آنلین
+   *  • هر تغییر در وب → آپلود خودکار (فوری برای تراکنش‌ها)
+   *  • هر ۲۰ ثانیه و با فوکوس شدن تب → بررسی نسخهٔ آنلین
    */
   const syncBusy = useRef(false);
   const skipNextAutoPush = useRef(false);
@@ -625,32 +675,48 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // لحظهٔ شروع — ویرایش‌های هنگام سینک باید dirty بمانند
     const startedAt = Date.now();
     try {
-      const rt = await remoteTime(cur.token);
-      // state تازه — شامل ویرایش‌هایی که حینِ remoteTime ثبت شده‌اند
+      const info = await remoteInfo(cur.token);
+      // state تازه — شامل ویرایش‌هایی که حینِ remoteInfo ثبت شده‌اند
       const latest = dbRef.current;
       const snapshot = loadOutbox();
       const dirty = latest.lastModified > latest.lastSync || snapshot.length > 0;
+      const unseen = !!info.sha && info.sha !== lastRemoteSha();
 
-      // ریموت جدیدتر + تغییرات محلیِ ثبت‌شده → دریافت، ادغام، آپلود (بازنویسی کور ممنوع)
-      if (snapshot.length > 0 && rt > latest.lastSync) {
+      // ریموت چیزی دارد که هنوز ندیده‌ایم → همیشه اول دریافت و ادغام، حتی
+      // با اوت‌باکسِ خالی: آپلودِ کور در این حالت تغییراتِ تازهٔ طرف دیگر را
+      // روی می‌ریزد (قاپی شدن داده). dirty نبودنِ محلی هم → فقط دریافت.
+      if (unseen) {
         const { merged, snapshot: fresh, payload } = await pullMerge(cur.token, latest.lastSync);
         skipNextAutoPush.current = true;
         dispatch({ type: "syncOn", payload });
-        await pushDB(cur.token, merged);
+        if (!dirty) {
+          // محلی تمیز → همان نسخهٔ دریافتی کافی است؛ آپلود لازم نیست
+          dispatch({ type: "setLastSync", payload: startedAt });
+          setRemoteSha(info.sha);
+          toast("📥 نسخهٔ تازه دریافت شد");
+          return true;
+        }
+        // sha از پاسخ PUT خودمان می‌آید — remoteInfo بعد از push می‌تواند
+        // کامیتِ هم‌زمانِ طرف دیگر را ببیند و بدون دیدن محتوایش «دیده‌شده» ثبتش کند
+        const newSha = await pushDB(cur.token, merged);
         clearEntries(fresh); // فقط بعد از آپلود موفق
         dispatch({ type: "setLastSync", payload: startedAt });
+        setRemoteSha(newSha || info.sha);
         toast("✅ دیتابیس آنلاین به‌روز شد", "success");
+        notifyRemote();
         return true;
       }
 
       // چیزی برای آپلود نیست و ریموت هم هست → دست نزن
-      if (!dirty && rt !== 0) return true;
+      if (!dirty && info.sha) return true;
 
-      // آپلود سادهٔ وضعیت محلی (ریموت قدیمی‌تر/مساوی یا هنوز فایلی ندارد)
-      await pushDB(cur.token, latest);
+      // آپلود سادهٔ وضعیت محلی (ریموت ندیده‌نشده ندارد یا هنوز فایلی نیست)
+      const newSha = await pushDB(cur.token, latest);
       clearEntries(snapshot);
       dispatch({ type: "setLastSync", payload: startedAt });
+      setRemoteSha(newSha || info.sha);
       toast("✅ دیتابیس آنلاین به‌روز شد", "success");
+      notifyRemote();
       return true;
     } catch (e) {
       toast(e instanceof Error ? e.message : "خطا در آپلود ❌", "error");
@@ -661,23 +727,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [dispatch, toast]);
 
   const syncPull = useCallback(
-    async (silent = false) => {
+    async (silent = false, knownSha?: string) => {
       const cur = dbRef.current;
       if (!cur.token || syncBusy.current) return false;
       syncBusy.current = true;
       const startedAt = Date.now();
       try {
+        // sha نسخه‌ای که داریم دانلود می‌کنیم — برای اینکه کامیتِ هم‌زمانِ
+        // طرف دیگر با ثبتِ sha اشتباه ماسک نشود، از نسخهٔ دانلودشده استفاده کن
+        const shaSeen = knownSha ?? (await remoteInfo(cur.token).catch(() => ({ sha: "", time: 0 }))).sha;
         const { merged, snapshot, payload } = await pullMerge(cur.token, cur.lastSync);
         skipNextAutoPush.current = true;
         if (snapshot.length > 0) {
           // تغییرات محلی هست → اول state ادغام‌شده، بعد آپلود (replay به‌جای پاک‌سازی)
           dispatch({ type: "syncOn", payload });
-          await pushDB(cur.token, merged);
+          const newSha = await pushDB(cur.token, merged);
           clearEntries(snapshot);
           dispatch({ type: "setLastSync", payload: startedAt });
+          setRemoteSha(newSha || shaSeen);
           toast("✅ دیتابیس آنلاین به‌روز شد", "success");
+          notifyRemote();
         } else {
           dispatch({ type: "syncOn", payload: { ...payload, lastSync: startedAt } });
+          setRemoteSha(shaSeen);
         }
         if (!silent) toast("📥 آخرین نسخه دریافت شد");
         return true;
@@ -706,14 +778,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       await syncPush();
       return;
     }
-    // دادهٔ تمیز → اگر آنلین جدیدتر است، دریافت
+    // دادهٔ تمیز → اگر نسخهٔ آنلین چیزی دارد که هنوز ندیده‌ایم، دریافت
     try {
-      const rt = await remoteTime(cur.token);
-      if (rt > cur.lastSync + 60_000) await syncPull(true);
+      const info = await remoteInfo(cur.token);
+      if (info.sha && info.sha !== lastRemoteSha()) await syncPull(true, info.sha);
     } catch (e) {
       toast(e instanceof Error ? e.message : "خطا در همگام‌سازی ❌", "error");
     }
   }, [syncPull, syncPush, toast]);
+
+  // خبر realtime از طرف دیگر («دیتابیس آنلاین عوض شد») → سینک فوری.
+  // اگر سینکی در جریان است خبر را رها نکن — کمی بعد دوباره (وگرنه
+  // تا پولینگ بعدیِ ۲۰ ثانیه‌ای معطل می‌ماندیم).
+  // اگر کامیت هنوز در API دیده نشود، همان پولینگ ۲۰ ثانیه‌ای جبران می‌کند.
+  const onRtUpdate = useCallback(async () => {
+    for (let i = 0; i < 8 && syncBusy.current; i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    if (syncBusy.current) return;
+    const hadOutbox = loadOutbox().length > 0;
+    const before = lastRemoteSha();
+    await startSync();
+    const after = lastRemoteSha();
+    if (!hadOutbox && after && after !== before) toast("📥 نسخهٔ تازه رسید");
+  }, [startSync, toast]);
 
   // در اولین اجرای واقعی (بعد از بارگذاری localStorage)
   const didStart = useRef(false);
@@ -722,6 +810,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     didStart.current = true;
     void startSync();
   }, [ready, startSync]);
+
+  // اولِ کار: توکن تازه باز شد (ورود از درِ ورود یا تنظیمات) → سینک فوری،
+  // مثل syncOnStart اندروید بعد از لاگین (دریافت نسخهٔ آنلاین اگر هست)
+  const prevToken = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ready) return;
+    const was = prevToken.current;
+    prevToken.current = db.token;
+    if (was === "" && db.token) void startSync();
+  }, [ready, db.token, startSync]);
 
   // سینک روی تغییر مسیر — با هر navigation بین صفحات همگام‌سازی می‌شود
   const pathname = usePathname();
@@ -773,7 +871,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [db, ready, syncPush]);
 
-  // بررسی دوره‌ای نسخهٔ آنلاین (هر ۶۰ ثانیه + هنگام فوکوس تب)
+  // بررسی دوره‌ای نسخهٔ آنلاین (هر ۲۰ ثانیه + هنگام فوکوس تب) —
+  // فقط وقتی sha کامیت عوض شده باشد pull می‌شود، پس ارزان است
   useEffect(() => {
     if (!ready || !db.token) return;
     const check = () => {
@@ -781,13 +880,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (dbRef.current.lastModified > dbRef.current.lastSync) return;
       void startSync();
     };
-    const iv = setInterval(check, 60_000);
+    const iv = setInterval(check, 20_000);
     document.addEventListener("visibilitychange", check);
     return () => {
       clearInterval(iv);
       document.removeEventListener("visibilitychange", check);
     };
   }, [ready, db.token, startSync]);
+
+  // اتصال realtime — اطلاع لحظه‌ای از تغییر دیتابیس آنلاین توسط طرف دیگر.
+  // فقط بعد از ورود (باز شدن قفل توکن)؛ و اگر کانال در دسترس نباشد،
+  // همان پولینگ ۲۰ ثانیه‌ای پشتیبان است.
+  useEffect(() => {
+    if (!ready || !db.token) return;
+    const cfg = rtConfig();
+    if (!cfg) return;
+    const client = new RtClient(cfg, {
+      onRemoteUpdate: () => {
+        void onRtUpdate();
+      },
+    });
+    rt = client;
+    client.connect();
+    return () => {
+      client.disconnect();
+      if (rt === client) rt = null;
+    };
+  }, [ready, db.token, onRtUpdate]);
 
   // بارگذاری از localStorage — همگام‌سازی یک‌باره با یک سیستم خارجی
   useEffect(() => {
